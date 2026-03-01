@@ -13,25 +13,29 @@ export default function ForgotPasswordScreen() {
     const [loading, setLoading] = useState(false);
 
     const onSendResetEmail = async () => {
-        if (!email.trim()) {
-            Alert.alert('Error', 'Ingresa tu correo.');
+        const normalizedEmail = email.trim().toLowerCase();
+        if (!normalizedEmail) {
+            Alert.alert('Error', 'Please enter your email.');
             return;
         }
 
-        setLoading(true);
-        const redirectTo = Linking.createURL('/reset-password');
-        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
-        setLoading(false);
+        try {
+            setLoading(true);
+            const redirectTo = Linking.createURL('/reset-password');
+            const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
 
-        if (error) {
-            Alert.alert('Error', 'No se pudo enviar el correo de recuperacion.');
-            return;
+            if (error) {
+                Alert.alert('Error', 'Could not send the recovery email.');
+                return;
+            }
+
+            Alert.alert(
+                'Email sent',
+                'Check your inbox and open the link to reset your password.'
+            );
+        } finally {
+            setLoading(false);
         }
-
-        Alert.alert(
-            'Correo enviado',
-            'Revisa tu correo y abre el enlace para cambiar tu contrasena.'
-        );
     };
 
     return (
@@ -48,9 +52,9 @@ export default function ForgotPasswordScreen() {
                     </TouchableOpacity>
 
                     <Card style={styles.card}>
-                        <Text style={styles.title}>Recuperar contrasena</Text>
+                        <Text style={styles.title}>Reset password</Text>
                         <Text style={styles.subtitle}>
-                            Te enviaremos un enlace para restablecer tu contrasena.
+                            We will send a link to reset your password.
                         </Text>
 
                         <RNView style={styles.inputGroup}>
@@ -74,7 +78,7 @@ export default function ForgotPasswordScreen() {
                             disabled={loading}
                             style={[styles.primaryButton, loading && { opacity: 0.7 }]}
                         >
-                            <Text style={styles.buttonText}>{loading ? 'ENVIANDO...' : 'Enviar enlace'}</Text>
+                            <Text style={styles.buttonText}>{loading ? 'SENDING...' : 'Send link'}</Text>
                         </TouchableOpacity>
                     </Card>
                 </RNView>

@@ -5,37 +5,165 @@ import { Screen, Card, Text } from '@/components/Themed';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/services/supabase';
 import { getOrCreateUserPreferences, updateUserPreferences } from '@/services/userPreferences';
+import { getBiometricCapability, promptBiometricVerification } from '@/services/biometrics';
 
 export default function SecurityScreen() {
   const { user } = useAuthStore();
   const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState('biometrics');
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricEnrolled, setBiometricEnrolled] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
-    void loadPreferences();
+    void initializeSecuritySettings();
   }, [user?.id]);
 
-  const loadPreferences = async () => {
+  const initializeSecuritySettings = async () => {
     if (!user?.id) return;
-    const { data, error } = await getOrCreateUserPreferences(user.id);
+
+    const [{ data, error }, capability] = await Promise.all([
+      getOrCreateUserPreferences(user.id),
+      getBiometricCapability(),
+    ]);
+
+    setBiometricSupported(capability.hasHardware);
+    setBiometricEnrolled(capability.isEnrolled);
+    setBiometricLabel(capability.label);
+
     if (error) {
       Alert.alert('Error', error.message);
       return;
     }
-    setBiometricEnabled(Boolean(data?.biometric_enabled));
+
+    const savedPreference = Boolean(data?.biometric_enabled);
+    if (savedPreference && (!capability.hasHardware || !capability.isEnrolled)) {
+      const { error: disableError } = await updateUserPreferences(user.id, { biometric_enabled: false });
+      if (disableError) {
+        Alert.alert('Error', disableError.message);
+      }
+      setBiometricEnabled(false);
+      return;
+    }
+
+    setBiometricEnabled(savedPreference);
+  };
+
+  const biometricSubtitle = !biometricSupported
+    ? 'Biometric hardware is not available on this device.'
+    : !biometricEnrolled
+      ? `No ${biometricLabel} is enrolled on this device. Add it in system settings first.`
+      : `Use ${biometricLabel} for secure verification in the app.`;
+
+  const mapBiometricError = (errorCode?: string) => {
+    if (!errorCode) return 'Biometric verification failed.';
+    if (errorCode === 'user_cancel' || errorCode === 'system_cancel' || errorCode === 'app_cancel') {
+      return 'Biometric verification was canceled.';
+    }
+    if (errorCode === 'not_enrolled') {
+      return `No ${biometricLabel} is enrolled on this device.`;
+    }
+    if (errorCode === 'lockout') {
+      return 'Biometrics are temporarily locked. Use device passcode and try again.';
+    }
+    if (errorCode === 'not_available') {
+      return 'Biometric authentication is not available on this device.';
+    }
+    if (errorCode === 'passcode_not_set') {
+      return 'Set a device passcode before enabling biometrics.';
+    }
+    return 'Biometric verification failed. Please try again.';
+  };
+
+  const enableBiometric = async () => {
+    if (!user?.id) return;
+    setBiometricBusy(true);
+
+    try {
+      const capability = await getBiometricCapability();
+      setBiometricSupported(capability.hasHardware);
+      setBiometricEnrolled(capability.isEnrolled);
+      setBiometricLabel(capability.label);
+
+      if (!capability.hasHardware) {
+        Alert.alert('Unavailable', 'Biometric hardware is not available on this device.');
+        return;
+      }
+
+      if (!capability.isEnrolled) {
+        Alert.alert(
+          'Not enrolled',
+          `No ${capability.label} is enrolled on this device. Add it in system settings first.`
+        );
+        return;
+      }
+
+      const authResult = await promptBiometricVerification(capability.label);
+      if (!authResult.success) {
+        Alert.alert('Verification failed', mapBiometricError((authResult as any).error));
+        return;
+      }
+
+      const { error } = await updateUserPreferences(user.id, { biometric_enabled: true });
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
+      }
+
+      setBiometricEnabled(true);
+      Alert.alert('Success', `${capability.label} has been enabled.`);
+    } finally {
+      setBiometricBusy(false);
+    }
+  };
+
+  const disableBiometric = async () => {
+    if (!user?.id) return;
+    setBiometricBusy(true);
+    const { error } = await updateUserPreferences(user.id, { biometric_enabled: false });
+    setBiometricBusy(false);
+
+    if (error) {
+      Alert.alert('Error', error.message);
+      return;
+    }
+
+    setBiometricEnabled(false);
   };
 
   const onToggleBiometric = async () => {
-    if (!user?.id) return;
-    const next = !biometricEnabled;
-    setBiometricEnabled(next);
-    const { error } = await updateUserPreferences(user.id, { biometric_enabled: next });
-    if (error) {
-      setBiometricEnabled(!next);
-      Alert.alert('Error', error.message);
+    if (biometricBusy) return;
+
+    if (biometricEnabled) {
+      await disableBiometric();
+      return;
+    }
+
+    await enableBiometric();
+  };
+
+  const onTestBiometric = async () => {
+    if (biometricBusy) return;
+    if (!biometricSupported || !biometricEnrolled) {
+      Alert.alert('Unavailable', biometricSubtitle);
+      return;
+    }
+
+    setBiometricBusy(true);
+    try {
+      const result = await promptBiometricVerification(biometricLabel);
+      if (!result.success) {
+        Alert.alert('Verification failed', mapBiometricError((result as any).error));
+        return;
+      }
+
+      Alert.alert('Success', `${biometricLabel} verification successful.`);
+    } finally {
+      setBiometricBusy(false);
     }
   };
 
@@ -80,15 +208,29 @@ export default function SecurityScreen() {
           <RNView style={styles.row}>
             <RNView style={styles.rowText}>
               <Text style={styles.rowTitle}>Biometric Lock</Text>
-              <Text style={styles.rowSubtitle}>Use Face ID / Touch ID to unlock app</Text>
+              <Text style={styles.rowSubtitle}>{biometricSubtitle}</Text>
             </RNView>
             <Switch
               value={biometricEnabled}
               onValueChange={onToggleBiometric}
+              disabled={biometricBusy || !biometricSupported}
               trackColor={{ false: '#CBD5E1', true: '#6366F1' }}
               thumbColor="#FFFFFF"
             />
           </RNView>
+
+          <TouchableOpacity
+            style={[
+              styles.verifyButton,
+              (biometricBusy || !biometricSupported || !biometricEnrolled) && styles.verifyButtonDisabled
+            ]}
+            onPress={onTestBiometric}
+            disabled={biometricBusy || !biometricSupported || !biometricEnrolled}
+          >
+            <Text style={styles.verifyButtonText}>
+              {biometricBusy ? 'Checking...' : `Test ${biometricLabel}`}
+            </Text>
+          </TouchableOpacity>
         </Card>
 
         <Card style={styles.card}>
@@ -158,6 +300,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     lineHeight: 16,
+  },
+  verifyButton: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#6366F1',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+  },
+  verifyButtonDisabled: {
+    opacity: 0.45,
+  },
+  verifyButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#4F46E5',
   },
   sectionTitle: {
     fontSize: 13,

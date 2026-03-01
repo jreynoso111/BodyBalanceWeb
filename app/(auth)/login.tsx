@@ -3,46 +3,127 @@ import { StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, P
 import { Text, View, Screen, Card } from '@/components/Themed';
 import { supabase } from '@/services/supabase';
 import { Stack, useRouter } from 'expo-router';
-import { ShieldCheck, Mail, Lock } from 'lucide-react-native';
+import { Mail, Lock } from 'lucide-react-native';
+import { BrandLogo } from '@/components/BrandLogo';
+import { GoogleLogo } from '@/components/GoogleLogo';
+import { signInWithGoogle } from '@/services/oauth';
+
+type FeedbackTone = 'error' | 'success' | 'info';
 
 export default function LoginScreen() {
     const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [authAction, setAuthAction] = useState<'sign_in' | 'google' | null>(null);
+    const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
 
-    const onSignIn = async () => {
-        if (!email.trim() || !password) {
-            Alert.alert('Error', 'Ingresa tu correo y contraseña.');
+    const normalizeEmail = (value: string) => value.trim().toLowerCase();
+
+    const isValidEmail = (value: string) => /\S+@\S+\.\S+/.test(value);
+
+    const showMessage = (title: string, message: string, tone: FeedbackTone) => {
+        setFeedback({ tone, text: message });
+
+        if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
+            globalThis.alert(`${title}\n\n${message}`);
             return;
         }
 
-        setLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-        });
-        if (error) Alert.alert('Error', 'Credenciales inválidas.');
-        setLoading(false);
+        Alert.alert(title, message);
     };
 
-    const onSignUp = async () => {
-        if (!email.trim() || !password) {
-            Alert.alert('Error', 'Ingresa tu correo y contraseña.');
+    const withTimeout = async <T,>(promise: Promise<T>, timeoutMs = 20000): Promise<T> => {
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        try {
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                timeoutId = setTimeout(() => {
+                    reject(new Error('The request timed out. Please try again.'));
+                }, timeoutMs);
+            });
+
+            return await Promise.race([promise, timeoutPromise]);
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+        }
+    };
+
+    const mapAuthError = (message: string) => {
+        const normalized = message.toLowerCase();
+
+        if (normalized.includes('invalid login credentials')) {
+            return 'Invalid email or password.';
+        }
+        if (normalized.includes('email not confirmed')) {
+            return 'Your email is not confirmed yet. Check your inbox and confirm your account first.';
+        }
+
+        return message;
+    };
+
+    const onSignIn = async () => {
+        if (authAction) return;
+        const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail || !password) {
+            showMessage('Error', 'Please enter your email and password.', 'error');
+            return;
+        }
+        if (!isValidEmail(normalizedEmail)) {
+            showMessage('Error', 'Please enter a valid email address.', 'error');
             return;
         }
 
-        setLoading(true);
-        const { error } = await supabase.auth.signUp({
-            email: email.trim(),
-            password,
-        });
-        if (error) {
-            Alert.alert('Error', 'No se pudo crear la cuenta. Verifica los datos e intenta de nuevo.');
-        } else {
-            Alert.alert('Cuenta creada', 'Revisa tu correo para confirmar tu cuenta.');
+        try {
+            setFeedback(null);
+            setAuthAction('sign_in');
+            const { error } = await withTimeout(supabase.auth.signInWithPassword({
+                email: normalizedEmail,
+                password,
+            }));
+
+            if (error) {
+                showMessage('Sign in failed', mapAuthError(error.message), 'error');
+                return;
+            }
+
+            setFeedback({ tone: 'success', text: 'Signed in successfully.' });
+            router.replace('/(tabs)');
+        } catch (error: any) {
+            showMessage('Sign in failed', error?.message || 'Unable to sign in right now. Please try again.', 'error');
+        } finally {
+            setAuthAction(null);
         }
-        setLoading(false);
+    };
+
+    const onGoogleSignIn = async () => {
+        if (authAction) return;
+
+        try {
+            setFeedback(null);
+            setAuthAction('google');
+
+            const result = await withTimeout(signInWithGoogle(), 30000);
+            if (result.status === 'success') {
+                setFeedback({ tone: 'success', text: 'Signed in with Google.' });
+                router.replace('/(tabs)');
+                return;
+            }
+
+            if (result.status === 'redirect') {
+                setFeedback({ tone: 'info', text: 'Continuing with Google...' });
+                return;
+            }
+
+            if (result.status === 'canceled') {
+                showMessage('Canceled', result.message || 'Google sign in was canceled.', 'info');
+                return;
+            }
+
+            showMessage('Google sign in failed', result.message || 'Unable to continue with Google right now.', 'error');
+        } catch (error: any) {
+            showMessage('Google sign in failed', error?.message || 'Unable to continue with Google right now.', 'error');
+        } finally {
+            setAuthAction(null);
+        }
     };
 
     return (
@@ -54,10 +135,7 @@ export default function LoginScreen() {
             >
                 <RNView style={styles.content}>
                     <RNView style={styles.header}>
-                        <RNView style={styles.logoBox}>
-                            <ShieldCheck size={40} color="#6366F1" />
-                        </RNView>
-                        <Text style={styles.title}>I GOT YOU</Text>
+                        <BrandLogo size="lg" showWordmark centered />
                         <Text style={styles.subtitle}>Securely manage what's yours.</Text>
                     </RNView>
 
@@ -94,30 +172,61 @@ export default function LoginScreen() {
 
                         <TouchableOpacity
                             onPress={() => router.push('/forgot-password')}
-                            disabled={loading}
+                            disabled={!!authAction}
                             style={styles.forgotButton}
                         >
-                            <Text style={styles.forgotButtonText}>¿Olvidaste tu contraseña?</Text>
+                            <Text style={styles.forgotButtonText}>Forgot your password?</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             onPress={onSignIn}
-                            disabled={loading}
+                            disabled={!!authAction}
                             style={styles.primaryButton}
                         >
-                            <Text style={styles.buttonText}>{loading ? 'VERIFYING...' : 'Sign In'}</Text>
+                            <Text style={styles.buttonText}>{authAction === 'sign_in' ? 'SIGNING IN...' : 'Sign In'}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            onPress={onSignUp}
-                            disabled={loading}
+                            onPress={onGoogleSignIn}
+                            disabled={!!authAction}
+                            style={styles.googleButton}
+                        >
+                            <GoogleLogo />
+                            <Text style={styles.googleButtonText}>{authAction === 'google' ? 'CONNECTING TO GOOGLE...' : 'Continue with Google'}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => router.push('/(auth)/register')}
+                            disabled={!!authAction}
                             style={styles.secondaryButton}
                         >
                             <Text style={styles.secondaryButtonText}>Create New Account</Text>
                         </TouchableOpacity>
+
+                        {feedback ? (
+                            <RNView
+                                style={[
+                                    styles.feedbackBox,
+                                    feedback.tone === 'error' && styles.feedbackError,
+                                    feedback.tone === 'success' && styles.feedbackSuccess,
+                                    feedback.tone === 'info' && styles.feedbackInfo,
+                                ]}
+                            >
+                                <Text
+                                    style={[
+                                        styles.feedbackText,
+                                        feedback.tone === 'error' && styles.feedbackTextError,
+                                        feedback.tone === 'success' && styles.feedbackTextSuccess,
+                                        feedback.tone === 'info' && styles.feedbackTextInfo,
+                                    ]}
+                                >
+                                    {feedback.text}
+                                </Text>
+                            </RNView>
+                        ) : null}
                     </Card>
 
-                    <Text style={styles.copyright}>© 2026 jreynoso — I GOT YOU</Text>
+                    <Text style={styles.copyright}>© 2026 jreynoso — I GOT U</Text>
                 </RNView>
             </KeyboardAvoidingView>
         </Screen>
@@ -138,25 +247,10 @@ const styles = StyleSheet.create({
         marginBottom: 40,
         backgroundColor: 'transparent',
     },
-    logoBox: {
-        width: 80,
-        height: 80,
-        borderRadius: 24,
-        backgroundColor: 'rgba(99, 102, 241, 0.1)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: '900',
-        color: '#0F172A',
-        letterSpacing: -1,
-    },
     subtitle: {
         fontSize: 16,
         color: '#64748B',
-        marginTop: 4,
+        marginTop: 10,
         fontWeight: '500',
     },
     authCard: {
@@ -210,6 +304,24 @@ const styles = StyleSheet.create({
         marginTop: 8,
         backgroundColor: 'transparent',
     },
+    googleButton: {
+        marginTop: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 16,
+        minHeight: 56,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+    },
+    googleButtonText: {
+        color: '#0F172A',
+        fontSize: 14,
+        fontWeight: '700',
+    },
     forgotButton: {
         alignSelf: 'flex-end',
         marginTop: -4,
@@ -231,6 +343,38 @@ const styles = StyleSheet.create({
         color: '#6366F1',
         fontSize: 15,
         fontWeight: '700',
+    },
+    feedbackBox: {
+        marginTop: 12,
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+    },
+    feedbackError: {
+        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+        borderColor: 'rgba(239, 68, 68, 0.24)',
+    },
+    feedbackSuccess: {
+        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        borderColor: 'rgba(16, 185, 129, 0.24)',
+    },
+    feedbackInfo: {
+        backgroundColor: 'rgba(99, 102, 241, 0.08)',
+        borderColor: 'rgba(99, 102, 241, 0.24)',
+    },
+    feedbackText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    feedbackTextError: {
+        color: '#B91C1C',
+    },
+    feedbackTextSuccess: {
+        color: '#047857',
+    },
+    feedbackTextInfo: {
+        color: '#4338CA',
     },
     copyright: {
         textAlign: 'center',

@@ -11,6 +11,9 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <title>I GOT U</title>
+        <meta name="theme-color" content="#6366F1" />
+        <meta name="description" content="I GOT U - lending made simple, secure, and human." />
 
         {/* 
           Disable body scrolling on web. This makes ScrollView components work closer to how they do on native. 

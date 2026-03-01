@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, KeyboardAvoidingView, Platform, Image, View as RNView } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, KeyboardAvoidingView, Platform, Image, View as RNView, Modal } from 'react-native';
 import { Text, View, Screen, Card } from '@/components/Themed';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter, Stack, useFocusEffect } from 'expo-router';
-import { X, Check, ChevronDown, Camera, Image as ImageIcon, Wallet, Box } from 'lucide-react-native';
+import { X, Check, ChevronDown, Camera, Image as ImageIcon, Wallet, Box, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { scheduleLoanReminder } from '@/services/notificationService';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { CURRENCIES, getCurrencySymbol } from '@/constants/Currencies';
+import { getOrCreateUserPreferences, sanitizePreferredCurrencies, updateUserPreferences } from '@/services/userPreferences';
 
 export default function NewLoanScreen() {
     const { user } = useAuthStore();
@@ -29,13 +30,54 @@ export default function NewLoanScreen() {
     const [reminderInterval, setReminderInterval] = useState('1');
     const [loading, setLoading] = useState(false);
     const [image, setImage] = useState<string | null>(null);
+    const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(['USD']);
+    const [currencyPickerVisible, setCurrencyPickerVisible] = useState(false);
     const base64StringRef = useRef<string | null>(null);
 
     useFocusEffect(
         useCallback(() => {
-            fetchContacts();
-        }, [user])
+            void fetchContacts();
+            void loadCurrencyPreferences();
+        }, [user?.id])
     );
+
+    const loadCurrencyPreferences = async () => {
+        if (!user?.id) return;
+
+        const { data, error } = await getOrCreateUserPreferences(user.id);
+        if (error) {
+            console.error('currency preferences load failed:', error.message);
+            return;
+        }
+
+        const preferred = sanitizePreferredCurrencies(data?.preferred_currencies);
+        setAvailableCurrencies(preferred);
+        setCurrency((current) => (preferred.includes(current) ? current : preferred[0]));
+    };
+
+    const addableCurrencies = CURRENCIES.filter((c) => !availableCurrencies.includes(c.code));
+
+    const openAddCurrencyPicker = () => {
+        if (addableCurrencies.length === 0) {
+            Alert.alert('Info', 'All available currencies are already enabled.');
+            return;
+        }
+        setCurrencyPickerVisible(true);
+    };
+
+    const handleAddCurrency = async (code: string) => {
+        const next = sanitizePreferredCurrencies([...availableCurrencies, code]);
+        setAvailableCurrencies(next);
+        setCurrency(code);
+        setCurrencyPickerVisible(false);
+
+        if (!user?.id) return;
+        const { error } = await updateUserPreferences(user.id, { preferred_currencies: next });
+        if (error) {
+            Alert.alert('Error', error.message);
+            await loadCurrencyPreferences();
+        }
+    };
 
     const fetchContacts = async () => {
         if (!user) return;
@@ -316,17 +358,21 @@ export default function NewLoanScreen() {
                                     />
                                 </View>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencySelector}>
-                                    {CURRENCIES.map(c => (
+                                    {availableCurrencies.map((code) => (
                                         <TouchableOpacity
-                                            key={c.code}
-                                            onPress={() => setCurrency(c.code)}
-                                            style={[styles.currencyChip, currency === c.code && styles.currencyChipActive]}
+                                            key={code}
+                                            onPress={() => setCurrency(code)}
+                                            style={[styles.currencyChip, currency === code && styles.currencyChipActive]}
                                         >
-                                            <Text style={[styles.currencyChipText, currency === c.code && styles.currencyChipTextActive]}>
-                                                {c.code}
+                                            <Text style={[styles.currencyChipText, currency === code && styles.currencyChipTextActive]}>
+                                                {code}
                                             </Text>
                                         </TouchableOpacity>
                                     ))}
+                                    <TouchableOpacity style={styles.currencyAddChip} onPress={openAddCurrencyPicker}>
+                                        <Plus size={14} color="#475569" />
+                                        <Text style={styles.currencyAddChipText}>Add</Text>
+                                    </TouchableOpacity>
                                 </ScrollView>
                             </View>
                         ) : (
@@ -434,6 +480,39 @@ export default function NewLoanScreen() {
                         )}
                     </Card>
 
+                    <Modal
+                        animationType="slide"
+                        transparent
+                        visible={currencyPickerVisible}
+                        onRequestClose={() => setCurrencyPickerVisible(false)}
+                    >
+                        <RNView style={styles.currencyModalOverlay}>
+                            <Card style={styles.currencyModalCard}>
+                                <Text style={styles.currencyModalTitle}>Add Currency</Text>
+                                <ScrollView style={styles.currencyModalList}>
+                                    {addableCurrencies.map((c) => (
+                                        <TouchableOpacity
+                                            key={c.code}
+                                            style={styles.currencyModalItem}
+                                            onPress={() => {
+                                                void handleAddCurrency(c.code);
+                                            }}
+                                        >
+                                            <Text style={styles.currencyModalCode}>{c.code}</Text>
+                                            <Text style={styles.currencyModalName}>{c.name}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </ScrollView>
+                                <TouchableOpacity
+                                    style={styles.currencyModalClose}
+                                    onPress={() => setCurrencyPickerVisible(false)}
+                                >
+                                    <Text style={styles.currencyModalCloseText}>Close</Text>
+                                </TouchableOpacity>
+                            </Card>
+                        </RNView>
+                    </Modal>
+
                     <TouchableOpacity
                         onPress={onSave}
                         disabled={loading}
@@ -442,7 +521,7 @@ export default function NewLoanScreen() {
                         <Text style={styles.saveButtonText}>{loading ? 'STAYING SECURE...' : 'Add Transaction'}</Text>
                     </TouchableOpacity>
 
-                    <Text style={styles.copyright}>© 2026 jreynoso — I GOT YOU</Text>
+                    <Text style={styles.copyright}>© 2026 jreynoso — I GOT U</Text>
                 </ScrollView>
             </KeyboardAvoidingView>
         </Screen>
@@ -689,5 +768,69 @@ const styles = StyleSheet.create({
     },
     currencyChipTextActive: {
         color: '#FFFFFF',
+    },
+    currencyAddChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 12,
+        backgroundColor: '#EEF2FF',
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#C7D2FE',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    currencyAddChipText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    currencyModalOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(15,23,42,0.45)',
+    },
+    currencyModalCard: {
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        maxHeight: '70%',
+    },
+    currencyModalTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#0F172A',
+        marginBottom: 12,
+    },
+    currencyModalList: {
+        maxHeight: 360,
+    },
+    currencyModalItem: {
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+    },
+    currencyModalCode: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#0F172A',
+    },
+    currencyModalName: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    currencyModalClose: {
+        marginTop: 14,
+        backgroundColor: '#0F172A',
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    currencyModalCloseText: {
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 14,
     },
 });

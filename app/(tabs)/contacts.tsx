@@ -1,16 +1,26 @@
 import React, { useState } from 'react';
-import { StyleSheet, FlatList, TouchableOpacity, View as RNView, TextInput } from 'react-native';
+import { StyleSheet, FlatList, TouchableOpacity, View as RNView, TextInput, useWindowDimensions } from 'react-native';
 import { Text, View, Screen, Card } from '@/components/Themed';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { UserPlus, Search } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ContactsScreen() {
   const { user } = useAuthStore();
   const [contacts, setContacts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+
+  const isTablet = width >= 768;
+  const horizontalPadding = isTablet ? 28 : 20;
+  const maxContentWidth = isTablet ? 760 : undefined;
+  const bottomInset = Math.max(insets.bottom, 12);
+  const fabBottomOffset = bottomInset + 16;
+  const listBottomPadding = bottomInset + 88;
 
   useFocusEffect(
     React.useCallback(() => {
@@ -37,8 +47,8 @@ export default function ContactsScreen() {
 
   return (
     <Screen style={styles.container}>
-      <RNView style={styles.searchWrapper}>
-        <View style={styles.searchContainer}>
+      <RNView style={[styles.searchWrapper, { paddingHorizontal: horizontalPadding, paddingTop: isTablet ? 24 : 20 }]}>
+        <View style={[styles.searchContainer, maxContentWidth ? { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%' } : null]}>
           <Search size={20} color="#94A3B8" />
           <TextInput
             placeholder="Search contacts..."
@@ -53,15 +63,24 @@ export default function ContactsScreen() {
       <FlatList
         data={filteredContacts}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          {
+            paddingHorizontal: horizontalPadding,
+            paddingBottom: listBottomPadding,
+          }
+        ]}
         ListEmptyComponent={
-          <Card style={styles.emptyCard}>
+          <Card style={[styles.emptyCard, maxContentWidth ? { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%' } : null]}>
             <Text style={styles.emptyText}>No contacts found.</Text>
           </Card>
         }
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.contactItemWrapper}
+            style={[
+              styles.contactItemWrapper,
+              maxContentWidth ? { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%' } : null
+            ]}
             onPress={() => router.push({ pathname: '/new-contact', params: { id: item.id } })}
           >
             <Card style={styles.contactItem}>
@@ -75,11 +94,17 @@ export default function ContactsScreen() {
             </Card>
           </TouchableOpacity>
         )}
-        ListFooterComponent={<Text style={styles.copyright}>© 2026 jreynoso — I GOT YOU</Text>}
+        ListFooterComponent={<Text style={styles.copyright}>© 2026 jreynoso — I GOT U</Text>}
       />
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[
+          styles.fab,
+          {
+            right: horizontalPadding,
+            bottom: fabBottomOffset,
+          }
+        ]}
         onPress={() => router.push('/new-contact')}
       >
         <UserPlus color="#fff" size={28} />
@@ -93,8 +118,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchWrapper: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
     backgroundColor: 'transparent',
   },
   searchContainer: {
@@ -114,8 +137,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   listContent: {
-    padding: 20,
-    paddingBottom: 100,
+    paddingTop: 20,
   },
   contactItemWrapper: {
     marginBottom: 12,
@@ -165,8 +187,6 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
-    right: 24,
     width: 64,
     height: 64,
     borderRadius: 32,
@@ -185,6 +205,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 32,
-    marginBottom: 100,
+    marginBottom: 12,
   },
 });
