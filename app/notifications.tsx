@@ -42,6 +42,7 @@ export default function NotificationsScreen() {
         reminder_enabled: data.reminder_enabled,
         biometric_enabled: data.biometric_enabled,
         marketing_enabled: data.marketing_enabled,
+        preferred_currencies: data.preferred_currencies,
       });
     }
   };
@@ -66,6 +67,7 @@ export default function NotificationsScreen() {
         reminder_enabled: data.reminder_enabled,
         biometric_enabled: data.biometric_enabled,
         marketing_enabled: data.marketing_enabled,
+        preferred_currencies: data.preferred_currencies,
       });
     }
   };

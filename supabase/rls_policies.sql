@@ -72,6 +72,11 @@ for update to authenticated
 using (user_id = auth.uid() or target_user_id = auth.uid())
 with check (user_id = auth.uid() or target_user_id = auth.uid());
 
+drop policy if exists payments_delete_participants on public.payments;
+create policy payments_delete_participants on public.payments
+for delete to authenticated
+using (user_id = auth.uid() or target_user_id = auth.uid());
+
 -- 5) P2P requests
 drop policy if exists p2p_requests_select_participants on public.p2p_requests;
 create policy p2p_requests_select_participants on public.p2p_requests
@@ -123,7 +128,14 @@ drop policy if exists profiles_update_self on public.profiles;
 create policy profiles_update_self on public.profiles
 for update to authenticated
 using (id = auth.uid())
-with check (id = auth.uid());
+with check (
+  id = auth.uid()
+  and role = (
+    select p.role
+    from public.profiles p
+    where p.id = auth.uid()
+  )
+);
 
 create or replace function public.find_profile_match(p_email text default null, p_phone text default null)
 returns uuid

@@ -9,6 +9,7 @@ import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { getCurrencySymbol } from '@/constants/Currencies';
 import { useGreetingStore } from '@/store/greetingStore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
@@ -18,9 +19,13 @@ export default function DashboardScreen() {
   const [filter, setFilter] = useState<'all' | 'lent' | 'borrowed'>('all');
   const [requestCount, setRequestCount] = useState(0);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [refreshing, setRefreshing] = useState(false);
   const colorScheme = useColorScheme() || 'light';
+  const bottomInset = Math.max(insets.bottom, 12);
+  const fabBottomOffset = bottomInset + 16;
+  const scrollBottomPadding = fabBottomOffset + 84;
 
   useFocusEffect(
     React.useCallback(() => {
@@ -113,7 +118,7 @@ export default function DashboardScreen() {
   return (
     <Screen style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPadding }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchData} tintColor={Colors[colorScheme].tint} />}
       >
         <View style={styles.header}>
@@ -229,7 +234,7 @@ export default function DashboardScreen() {
       </ScrollView>
 
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, { bottom: fabBottomOffset }]}
         onPress={() => router.push('/new-loan')}
       >
         <Plus color="#fff" size={32} />
@@ -245,7 +250,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingTop: 40,
-    paddingBottom: 100,
   },
   greetingRow: {
     flexDirection: 'row',
@@ -470,7 +474,6 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
     right: 24,
     width: 64,
     height: 64,

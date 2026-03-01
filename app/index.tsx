@@ -2,8 +2,10 @@ import React from 'react';
 import { StyleSheet, Text, View, Pressable, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Wallet, ArrowRight, ShieldCheck, Zap } from 'lucide-react-native';
+import { ArrowRight, ShieldCheck, Zap } from 'lucide-react-native';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
+import { BrandLogo } from '@/components/BrandLogo';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
@@ -18,10 +20,7 @@ export default function LandingPage() {
                         entering={FadeInUp.delay(300).duration(1000)}
                         style={styles.logoContainer}
                     >
-                        <View style={styles.iconCircle}>
-                            <Wallet size={48} color="#818CF8" />
-                        </View>
-                        <Text style={styles.title}>I GOT YOU</Text>
+                        <BrandLogo size="lg" showWordmark centered />
                         <Text style={styles.subtitle}>Hassle-free lending, for your loved ones.</Text>
                     </Animated.View>
 
@@ -30,11 +29,11 @@ export default function LandingPage() {
                         style={styles.featuresContainer}
                     >
                         <FeatureItem
-                            icon={<ShieldCheck size={24} color="#A78BFA" />}
+                            icon={<ShieldCheck size={22} color="#1D4ED8" />}
                             text="Secure & Reliable"
                         />
                         <FeatureItem
-                            icon={<Zap size={24} color="#FBBF24" />}
+                            icon={<Zap size={22} color="#0284C7" />}
                             text="Real-time Management"
                         />
                     </Animated.View>
@@ -66,10 +65,17 @@ export default function LandingPage() {
 
 function FeatureItem({ icon, text }: { icon: React.ReactNode, text: string }) {
     return (
-        <View style={styles.featureItem}>
-            {icon}
+        <LinearGradient
+            colors={['rgba(255,255,255,0.84)', 'rgba(255,255,255,0.50)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.featureItem}
+        >
+            <View style={styles.featureIconWrap}>
+                {icon}
+            </View>
             <Text style={styles.featureText}>{text}</Text>
-        </View>
+        </LinearGradient>
     );
 }
 
@@ -88,30 +94,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 48,
     },
-    iconCircle: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(129, 140, 248, 0.3)',
-    },
-    title: {
-        fontSize: 42,
-        fontWeight: '900',
-        color: '#0F172A',
-        letterSpacing: -1,
-        marginBottom: 8,
-    },
     subtitle: {
         fontSize: 18,
         color: '#475569',
         textAlign: 'center',
         lineHeight: 26,
         paddingHorizontal: 20,
+        marginTop: 12,
     },
     featuresContainer: {
         width: '100%',
@@ -120,17 +109,32 @@ const styles = StyleSheet.create({
     featureItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(30, 41, 59, 0.5)',
+        backgroundColor: 'rgba(255,255,255,0.56)',
         padding: 16,
         borderRadius: 16,
         marginBottom: 12,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)',
+        borderColor: 'rgba(255,255,255,0.82)',
+        shadowColor: '#334155',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.14,
+        shadowRadius: 20,
+        elevation: 6,
+    },
+    featureIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        backgroundColor: 'rgba(255,255,255,0.78)',
+        borderWidth: 1,
+        borderColor: 'rgba(226,232,240,0.95)',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     featureText: {
-        color: '#1E293B',
+        color: '#0F172A',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
         marginLeft: 12,
     },
     ctaContainer: {

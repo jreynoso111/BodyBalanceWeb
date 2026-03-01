@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text as RNText, ScrollView, TouchableOpacity, Alert, ActivityIndicator, View as RNView, TextInput, Image, Modal } from 'react-native';
+import { StyleSheet, Text as RNText, ScrollView, TouchableOpacity, Alert, ActivityIndicator, View as RNView, TextInput, Image, Modal, Platform } from 'react-native';
 import { Text, View, Screen, Card } from '@/components/Themed';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter, Stack } from 'expo-router';
+import { CommonActions } from '@react-navigation/native';
 import { supabase } from '@/services/supabase';
 import { ArrowLeft, Wallet, Calendar, Plus, Clock, FileText, Trash2, Edit, Box, ChevronRight, TrendingUp, TrendingDown, Zap, Activity, ShieldCheck, ShieldAlert, Shield, Bell, History, MoreHorizontal, Info, X } from 'lucide-react-native';
 import { useAuthStore } from '@/store/authStore';
 import { CURRENCIES, getCurrencySymbol } from '@/constants/Currencies';
+import { getOrCreateUserPreferences, sanitizePreferredCurrencies, updateUserPreferences } from '@/services/userPreferences';
 
 export default function LoanDetailScreen() {
     const { id } = useLocalSearchParams();
     const loanId = Array.isArray(id) ? id[0] : id;
     const router = useRouter();
+    const navigation = useNavigation();
     const { user } = useAuthStore();
     const [loan, setLoan] = useState<any>(null);
     const [payments, setPayments] = useState<any[]>([]);
@@ -25,11 +28,48 @@ export default function LoanDetailScreen() {
     const [editDueDate, setEditDueDate] = useState('');
     const [selectedPaymentHistory, setSelectedPaymentHistory] = useState<any[]>([]);
     const [historyModalVisible, setHistoryModalVisible] = useState(false);
+    const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(['USD']);
+    const [currencyPickerVisible, setCurrencyPickerVisible] = useState(false);
 
     useEffect(() => {
         if (!loanId || !user?.id) return;
         fetchLoanDetails();
+        void loadCurrencyPreferences();
     }, [loanId, user]);
+
+    const goToHome = () => {
+        navigation.dispatch(
+            CommonActions.reset({
+                index: 0,
+                routes: [{ name: '(tabs)' as never }],
+            })
+        );
+    };
+
+    const confirmAction = (title: string, message: string, onConfirm: () => Promise<void> | void) => {
+        if (Platform.OS === 'web') {
+            const browserConfirm = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
+            const accepted = browserConfirm ? browserConfirm(`${title}\n\n${message}`) : true;
+            if (accepted) {
+                void onConfirm();
+            }
+            return;
+        }
+
+        Alert.alert(
+            title,
+            message,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Confirm',
+                    onPress: () => {
+                        void onConfirm();
+                    },
+                },
+            ]
+        );
+    };
 
     const fetchLoanDetails = async () => {
         if (!loanId) return;
@@ -43,7 +83,7 @@ export default function LoanDetailScreen() {
 
         if (loanError || !loanData) {
             Alert.alert('Error', loanError?.message || 'Loan not found');
-            router.back();
+            goToHome();
             setLoading(false);
             return;
         }
@@ -59,11 +99,104 @@ export default function LoanDetailScreen() {
         setReminderFrequency(loanData.reminder_frequency || 'none');
         setReminderInterval(loanData.reminder_interval?.toString() || '1');
         setEditCurrency(loanData.currency || 'USD');
+        if (loanData.currency) {
+            setAvailableCurrencies((current) => sanitizePreferredCurrencies([...current, loanData.currency]));
+        }
         setEditAmount(loanData.amount ? String(loanData.amount) : '');
         setEditItemName(loanData.item_name || '');
         setEditDueDate(loanData.due_date || '');
         setPayments(paymentData || []);
         setLoading(false);
+    };
+
+    const loadCurrencyPreferences = async () => {
+        if (!user?.id) return;
+
+        const { data, error } = await getOrCreateUserPreferences(user.id);
+        if (error) {
+            console.error('currency preferences load failed:', error.message);
+            return;
+        }
+
+        const preferred = sanitizePreferredCurrencies(data?.preferred_currencies);
+        setAvailableCurrencies(preferred);
+        setEditCurrency((current) => (preferred.includes(current) ? current : preferred[0]));
+    };
+
+    const addableCurrencies = CURRENCIES.filter((c) => !availableCurrencies.includes(c.code));
+
+    const openAddCurrencyPicker = () => {
+        if (addableCurrencies.length === 0) {
+            Alert.alert('Info', 'All available currencies are already enabled.');
+            return;
+        }
+        setCurrencyPickerVisible(true);
+    };
+
+    const handleAddCurrency = async (code: string) => {
+        const next = sanitizePreferredCurrencies([...availableCurrencies, code]);
+        setAvailableCurrencies(next);
+        setEditCurrency(code);
+        setCurrencyPickerVisible(false);
+
+        if (!user?.id) return;
+        const { error } = await updateUserPreferences(user.id, { preferred_currencies: next });
+        if (error) {
+            Alert.alert('Error', error.message);
+            await loadCurrencyPreferences();
+        }
+    };
+
+    const syncLoanStatus = async () => {
+        if (!loanId) return;
+
+        const { data: loanSnapshot, error: loanSnapshotError } = await supabase
+            .from('loans')
+            .select('id, category, amount')
+            .eq('id', loanId)
+            .single();
+
+        if (loanSnapshotError || !loanSnapshot) return;
+
+        const { data: itemSettlement } = await supabase
+            .from('payments')
+            .select('id')
+            .eq('loan_id', loanId)
+            .eq('payment_method', 'item')
+            .limit(1);
+
+        const hasItemSettlement = (itemSettlement?.length || 0) > 0;
+        if (hasItemSettlement) {
+            await supabase
+                .from('loans')
+                .update({ status: 'paid' })
+                .eq('id', loanId);
+            return;
+        }
+
+        const { data: allMoneyPayments } = await supabase
+            .from('payments')
+            .select('amount')
+            .eq('loan_id', loanId)
+            .eq('payment_method', 'money');
+
+        const totalPaid = (allMoneyPayments || []).reduce((acc, payment) => {
+            const parsed = Number(payment.amount);
+            return Number.isFinite(parsed) ? acc + parsed : acc;
+        }, 0);
+
+        const loanAmount = Number(loanSnapshot.amount);
+        let nextStatus: 'active' | 'partial' | 'paid' = 'active';
+
+        if (Number.isFinite(loanAmount) && loanAmount > 0) {
+            if (totalPaid >= loanAmount) nextStatus = 'paid';
+            else if (totalPaid > 0) nextStatus = 'partial';
+        }
+
+        await supabase
+            .from('loans')
+            .update({ status: nextStatus })
+            .eq('id', loanId);
     };
 
     const handleUpdate = async () => {
@@ -109,7 +242,6 @@ export default function LoanDetailScreen() {
             .from('loans')
             .update(payload)
             .eq('id', loanId)
-            .eq('user_id', user.id)
             .is('deleted_at', null)
             .select('id');
 
@@ -124,25 +256,46 @@ export default function LoanDetailScreen() {
         }
     };
 
+    const handleDeletePayment = (paymentId: string) => {
+        if (!loanId || !user?.id) {
+            Alert.alert('Error', 'Loan not found');
+            return;
+        }
+
+        confirmAction(
+            'Delete Payment',
+            'Are you sure you want to delete this payment? This action cannot be undone.',
+            async () => {
+                const { error } = await supabase
+                    .from('payments')
+                    .delete()
+                    .eq('id', paymentId)
+                    .eq('loan_id', loanId);
+
+                if (error) {
+                    Alert.alert('Error', error.message);
+                    return;
+                }
+
+                await syncLoanStatus();
+                await fetchLoanDetails();
+                Alert.alert('Success', 'Payment deleted');
+            }
+        );
+    };
+
     const handleDelete = async () => {
         if (!loanId || !user?.id) {
             Alert.alert('Error', 'Loan not found');
             return;
         }
 
-        Alert.alert(
+        confirmAction(
             'Delete Record',
             'Are you sure you want to delete this loan? This action is undoable only by contact supports.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => {
-                        void confirmDelete();
-                    },
-                }
-            ]
+            async () => {
+                await confirmDelete();
+            }
         );
     };
 
@@ -210,14 +363,20 @@ export default function LoanDetailScreen() {
 
     if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#000" /></View>;
 
-    const totalPaid = payments.reduce((acc, p) => acc + Number(p.amount), 0);
-    const remaining = Number(loan.amount) - totalPaid;
+    const loanAmountValue = Number(loan.amount);
+    const safeLoanAmount = Number.isFinite(loanAmountValue) && loanAmountValue > 0 ? loanAmountValue : 0;
+    const totalPaid = payments.reduce((acc, p) => {
+        const paymentAmount = Number(p.amount);
+        return Number.isFinite(paymentAmount) ? acc + paymentAmount : acc;
+    }, 0);
+    const remaining = safeLoanAmount - totalPaid;
 
     // Analytics Calculations
     const totalDays = loan.due_date ? Math.max(1, (new Date(loan.due_date).getTime() - new Date(loan.created_at).getTime()) / (1000 * 60 * 60 * 24)) : 0;
     const elapsedDays = Math.max(0, (new Date().getTime() - new Date(loan.created_at).getTime()) / (1000 * 60 * 60 * 24));
     const timeProgress = totalDays > 0 ? Math.min(100, (elapsedDays / totalDays) * 100) : 0;
-    const paymentProgress = (totalPaid / Number(loan.amount)) * 100;
+    const paymentProgress = safeLoanAmount > 0 ? (totalPaid / safeLoanAmount) * 100 : 0;
+    const paymentProgressClamped = Math.max(0, Math.min(paymentProgress, 100));
 
     let health: 'ahead' | 'on_track' | 'behind' = 'on_track';
     if (paymentProgress > timeProgress + 10) health = 'ahead';
@@ -231,6 +390,11 @@ export default function LoanDetailScreen() {
             <Stack.Screen
                 options={{
                     title: 'Record Details',
+                    headerLeft: () => (
+                        <TouchableOpacity onPress={goToHome} style={styles.closeHeaderBtn}>
+                            <ArrowLeft size={20} color="#0F172A" />
+                        </TouchableOpacity>
+                    ),
                     headerRight: () => (
                         <TouchableOpacity onPress={handleDelete} style={styles.deleteHeader}>
                             <Trash2 size={20} color="#EF4444" />
@@ -269,7 +433,7 @@ export default function LoanDetailScreen() {
                             </RNView>
                             <RNView style={[styles.breakdownItem, { alignItems: 'flex-end' }]}>
                                 <RNText style={styles.breakdownLabel}>Original Total</RNText>
-                                <Text style={styles.breakdownValue}>{getCurrencySymbol(loan.currency)}{Number(loan.amount).toLocaleString()}</Text>
+                                <Text style={styles.breakdownValue}>{getCurrencySymbol(loan.currency)}{safeLoanAmount.toLocaleString()}</Text>
                             </RNView>
                         </RNView>
                     )}
@@ -278,10 +442,10 @@ export default function LoanDetailScreen() {
                         <RNView style={styles.progressSection}>
                             <RNView style={styles.progressLabels}>
                                 <Text style={styles.progressLabel}>Payment Progress</Text>
-                                <Text style={styles.progressPercent}>{Math.round(Math.min((totalPaid / loan.amount) * 100, 100))}%</Text>
+                                <Text style={styles.progressPercent}>{Math.round(paymentProgressClamped)}%</Text>
                             </RNView>
                             <RNView style={styles.progressBar}>
-                                <RNView style={[styles.progressFill, { width: `${Math.min((totalPaid / loan.amount) * 100, 100)}%` }]} />
+                                <RNView style={[styles.progressFill, { width: `${paymentProgressClamped}%` }]} />
                             </RNView>
                         </RNView>
                     )}
@@ -314,17 +478,21 @@ export default function LoanDetailScreen() {
                                 <RNView>
                                     <Text style={styles.label}>Currency</Text>
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencySelector}>
-                                        {CURRENCIES.map((c) => (
+                                        {availableCurrencies.map((code) => (
                                             <TouchableOpacity
-                                                key={c.code}
-                                                onPress={() => setEditCurrency(c.code)}
-                                                style={[styles.currencyChip, editCurrency === c.code && styles.currencyChipActive]}
+                                                key={code}
+                                                onPress={() => setEditCurrency(code)}
+                                                style={[styles.currencyChip, editCurrency === code && styles.currencyChipActive]}
                                             >
-                                                <Text style={[styles.currencyChipText, editCurrency === c.code && styles.currencyChipTextActive]}>
-                                                    {c.code}
+                                                <Text style={[styles.currencyChipText, editCurrency === code && styles.currencyChipTextActive]}>
+                                                    {code}
                                                 </Text>
                                             </TouchableOpacity>
                                         ))}
+                                        <TouchableOpacity style={styles.currencyAddChip} onPress={openAddCurrencyPicker}>
+                                            <Plus size={14} color="#475569" />
+                                            <Text style={styles.currencyAddChipText}>Add</Text>
+                                        </TouchableOpacity>
                                     </ScrollView>
 
                                     <Text style={styles.label}>Amount</Text>
@@ -467,7 +635,7 @@ export default function LoanDetailScreen() {
                                     <Zap size={20} color="#F59E0B" />
                                 </RNView>
                                 <Text style={styles.analyticsLabel}>Velocity</Text>
-                                <Text style={styles.analyticsValue}>${Math.round(avgPayment).toLocaleString()}/pay</Text>
+                                <Text style={styles.analyticsValue}>{getCurrencySymbol(loan.currency)}{Math.round(avgPayment).toLocaleString()}/pay</Text>
                             </Card>
                         </RNView>
 
@@ -511,6 +679,7 @@ export default function LoanDetailScreen() {
                                             <TouchableOpacity
                                                 onPress={() => fetchPaymentHistory(p.id)}
                                                 style={styles.actionIcon}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                             >
                                                 <History size={16} color="#64748B" />
                                             </TouchableOpacity>
@@ -526,8 +695,16 @@ export default function LoanDetailScreen() {
                                                     }
                                                 })}
                                                 style={styles.actionIcon}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                             >
                                                 <Edit size={16} color="#64748B" />
+                                            </TouchableOpacity>
+                                            <TouchableOpacity
+                                                onPress={() => handleDeletePayment(p.id)}
+                                                style={styles.actionIcon}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                            >
+                                                <Trash2 size={16} color="#EF4444" />
                                             </TouchableOpacity>
                                         </RNView>
                                     </RNView>
@@ -540,7 +717,7 @@ export default function LoanDetailScreen() {
                     </RNView>
                 </RNView>
 
-                <Text style={styles.copyright}>© 2026 jreynoso — I GOT YOU</Text>
+                <Text style={styles.copyright}>© 2026 jreynoso — I GOT U</Text>
             </ScrollView>
 
             <Modal
@@ -594,6 +771,36 @@ export default function LoanDetailScreen() {
                             )}
                         </ScrollView>
                     </RNView>
+                </RNView>
+            </Modal>
+
+            <Modal
+                animationType="slide"
+                transparent
+                visible={currencyPickerVisible}
+                onRequestClose={() => setCurrencyPickerVisible(false)}
+            >
+                <RNView style={styles.currencyModalOverlay}>
+                    <Card style={styles.currencyModalCard}>
+                        <Text style={styles.currencyModalTitle}>Add Currency</Text>
+                        <ScrollView style={styles.currencyModalList}>
+                            {addableCurrencies.map((c) => (
+                                <TouchableOpacity
+                                    key={c.code}
+                                    style={styles.currencyModalItem}
+                                    onPress={() => {
+                                        void handleAddCurrency(c.code);
+                                    }}
+                                >
+                                    <Text style={styles.currencyModalCode}>{c.code}</Text>
+                                    <Text style={styles.currencyModalName}>{c.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                        <TouchableOpacity style={styles.currencyModalClose} onPress={() => setCurrencyPickerVisible(false)}>
+                            <Text style={styles.currencyModalCloseText}>Close</Text>
+                        </TouchableOpacity>
+                    </Card>
                 </RNView>
             </Modal>
 
@@ -660,6 +867,14 @@ export default function LoanDetailScreen() {
                         <Text style={styles.secondaryBtnText}>Request Reduction</Text>
                     </TouchableOpacity>
                 )}
+
+                <TouchableOpacity
+                    style={styles.deleteRecordBtn}
+                    onPress={handleDelete}
+                >
+                    <Trash2 color="#EF4444" size={20} />
+                    <Text style={styles.deleteRecordBtnText}>Delete Record</Text>
+                </TouchableOpacity>
             </RNView>
         </Screen >
     );
@@ -684,6 +899,14 @@ const styles = StyleSheet.create({
         height: 36,
         borderRadius: 10,
         backgroundColor: 'rgba(239, 68, 68, 0.05)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    closeHeaderBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: 'rgba(15, 23, 42, 0.06)',
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -1063,6 +1286,23 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
     },
+    deleteRecordBtn: {
+        marginTop: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#FECACA',
+        backgroundColor: '#FEF2F2',
+        gap: 8,
+    },
+    deleteRecordBtnText: {
+        color: '#EF4444',
+        fontSize: 16,
+        fontWeight: '800',
+    },
     copyright: {
         textAlign: 'center',
         color: '#94A3B8',
@@ -1095,6 +1335,23 @@ const styles = StyleSheet.create({
     currencyChipTextActive: {
         color: '#FFFFFF',
     },
+    currencyAddChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        borderRadius: 12,
+        backgroundColor: '#EEF2FF',
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#C7D2FE',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    currencyAddChipText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#475569',
+    },
     input: {
         borderWidth: 1,
         borderColor: '#E2E8F0',
@@ -1121,7 +1378,59 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     actionIcon: {
-        padding: 4,
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        backgroundColor: '#F8FAFC',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    currencyModalOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(15,23,42,0.45)',
+    },
+    currencyModalCard: {
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        maxHeight: '70%',
+    },
+    currencyModalTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#0F172A',
+        marginBottom: 12,
+    },
+    currencyModalList: {
+        maxHeight: 360,
+    },
+    currencyModalItem: {
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E2E8F0',
+    },
+    currencyModalCode: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#0F172A',
+    },
+    currencyModalName: {
+        fontSize: 12,
+        color: '#64748B',
+        marginTop: 2,
+    },
+    currencyModalClose: {
+        marginTop: 14,
+        backgroundColor: '#0F172A',
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    currencyModalCloseText: {
+        color: '#fff',
+        fontWeight: '700',
+        fontSize: 14,
     },
     modalOverlay: {
         flex: 1,

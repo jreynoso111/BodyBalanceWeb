@@ -56,7 +56,7 @@ export default function ResetPasswordScreen() {
                 if (error) throw error;
             }
         } catch {
-            Alert.alert('Error', 'El enlace de recuperacion es invalido o expiro.');
+            Alert.alert('Error', 'The recovery link is invalid or expired.');
         } finally {
             setInitializing(false);
         }
@@ -68,15 +68,15 @@ export default function ResetPasswordScreen() {
 
     const onUpdatePassword = async () => {
         if (!password || !confirmPassword) {
-            Alert.alert('Error', 'Completa ambos campos.');
+            Alert.alert('Error', 'Please complete both fields.');
             return;
         }
         if (password.length < 6) {
-            Alert.alert('Error', 'La contrasena debe tener al menos 6 caracteres.');
+            Alert.alert('Error', 'Password must be at least 6 characters.');
             return;
         }
         if (password !== confirmPassword) {
-            Alert.alert('Error', 'Las contrasenas no coinciden.');
+            Alert.alert('Error', 'Passwords do not match.');
             return;
         }
 
@@ -85,12 +85,12 @@ export default function ResetPasswordScreen() {
         setLoading(false);
 
         if (error) {
-            Alert.alert('Error', 'No se pudo actualizar la contrasena. Solicita otro enlace.');
+            Alert.alert('Error', 'Could not update password. Request a new reset link.');
             return;
         }
 
         await supabase.auth.signOut();
-        Alert.alert('Listo', 'Contrasena actualizada. Inicia sesion con la nueva contrasena.');
+        Alert.alert('Done', 'Password updated. Sign in with your new password.');
         router.replace('/(auth)/login');
     };
 
@@ -108,22 +108,22 @@ export default function ResetPasswordScreen() {
                     </TouchableOpacity>
 
                     <Card style={styles.card}>
-                        <Text style={styles.title}>Nueva contrasena</Text>
-                        <Text style={styles.subtitle}>Define una nueva contrasena para tu cuenta.</Text>
+                        <Text style={styles.title}>New password</Text>
+                        <Text style={styles.subtitle}>Set a new password for your account.</Text>
 
                         {initializing ? (
                             <RNView style={styles.loadingBox}>
                                 <ActivityIndicator size="small" color="#6366F1" />
-                                <Text style={styles.loadingText}>Validando enlace...</Text>
+                                <Text style={styles.loadingText}>Validating link...</Text>
                             </RNView>
                         ) : (
                             <>
                                 <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>Nueva contrasena</Text>
+                                    <Text style={styles.label}>New password</Text>
                                     <RNView style={styles.inputWrapper}>
                                         <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
                                         <TextInput
-                                            placeholder="Minimo 6 caracteres"
+                                            placeholder="Minimum 6 characters"
                                             placeholderTextColor="#94A3B8"
                                             value={password}
                                             onChangeText={setPassword}
@@ -134,11 +134,11 @@ export default function ResetPasswordScreen() {
                                 </RNView>
 
                                 <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>Confirmar contrasena</Text>
+                                    <Text style={styles.label}>Confirm password</Text>
                                     <RNView style={styles.inputWrapper}>
                                         <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
                                         <TextInput
-                                            placeholder="Repite la contrasena"
+                                            placeholder="Repeat your password"
                                             placeholderTextColor="#94A3B8"
                                             value={confirmPassword}
                                             onChangeText={setConfirmPassword}
@@ -153,7 +153,7 @@ export default function ResetPasswordScreen() {
                                     disabled={loading}
                                     style={[styles.primaryButton, loading && { opacity: 0.7 }]}
                                 >
-                                    <Text style={styles.buttonText}>{loading ? 'ACTUALIZANDO...' : 'Actualizar contrasena'}</Text>
+                                    <Text style={styles.buttonText}>{loading ? 'UPDATING...' : 'Update password'}</Text>
                                 </TouchableOpacity>
                             </>
                         )}

@@ -134,7 +134,7 @@ export default function RequestsScreen() {
                         <Text style={styles.emptyDesc}>When someone links a transaction with you, it will appear here.</Text>
                     </View>
                 }
-                ListFooterComponent={<Text style={styles.copyright}>© 2026 jreynoso — I GOT YOU</Text>}
+                ListFooterComponent={<Text style={styles.copyright}>© 2026 jreynoso — I GOT U</Text>}
             />
         </Screen>
     );

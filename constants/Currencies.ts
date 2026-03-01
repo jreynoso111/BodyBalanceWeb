@@ -8,6 +8,7 @@ export const CURRENCIES = [
     { code: 'CLP', symbol: '$', name: 'Chilean Peso' },
     { code: 'PEN', symbol: 'S/', name: 'Peruvian Sol' },
     { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
+    { code: 'DOP', symbol: 'RD$', name: 'Dominican Peso' },
 ];
 
 export const getCurrencySymbol = (code: string) => {

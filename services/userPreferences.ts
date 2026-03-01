@@ -7,6 +7,7 @@ export interface UserPreferences {
   reminder_enabled: boolean;
   biometric_enabled: boolean;
   marketing_enabled: boolean;
+  preferred_currencies: string[];
   updated_at?: string;
 }
 
@@ -16,7 +17,18 @@ export const DEFAULT_USER_PREFERENCES: Omit<UserPreferences, 'user_id'> = {
   reminder_enabled: true,
   biometric_enabled: false,
   marketing_enabled: false,
+  preferred_currencies: ['USD'],
 };
+
+export function sanitizePreferredCurrencies(currencies?: string[] | null): string[] {
+  const normalized = (currencies || [])
+    .map((code) => String(code || '').trim().toUpperCase())
+    .filter(Boolean);
+
+  const deduped = Array.from(new Set(normalized));
+  if (deduped.length === 0) return ['USD'];
+  return deduped;
+}
 
 export async function getOrCreateUserPreferences(userId: string): Promise<{
   data: UserPreferences | null;
@@ -33,7 +45,13 @@ export async function getOrCreateUserPreferences(userId: string): Promise<{
   }
 
   if (data) {
-    return { data: data as UserPreferences, error: null };
+    return {
+      data: {
+        ...(data as UserPreferences),
+        preferred_currencies: sanitizePreferredCurrencies((data as any).preferred_currencies),
+      },
+      error: null,
+    };
   }
 
   const { data: inserted, error: insertError } = await supabase
@@ -70,5 +88,11 @@ export async function updateUserPreferences(
     return { data: null, error: new Error(error.message) };
   }
 
-  return { data: data as UserPreferences, error: null };
+  return {
+    data: {
+      ...(data as UserPreferences),
+      preferred_currencies: sanitizePreferredCurrencies((data as any)?.preferred_currencies),
+    },
+    error: null,
+  };
 }

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, TextInput, TouchableOpacity, Text, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter, Stack } from 'expo-router';
+import { CommonActions } from '@react-navigation/native';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
-import { X, Check, Wallet, Info, Box } from 'lucide-react-native';
+import { X, Check, Wallet, Info, Box, Trash2 } from 'lucide-react-native';
 import { Screen, Card, View as ThemedView, Text as ThemedText } from '@/components/Themed';
 import { getCurrencySymbol } from '@/constants/Currencies';
 
@@ -16,6 +17,7 @@ export default function RegisterPaymentScreen() {
     const normalizedRemaining = Array.isArray(remaining) ? remaining[0] : remaining;
     const { user } = useAuthStore();
     const router = useRouter();
+    const navigation = useNavigation();
 
     const [paymentMethod, setPaymentMethod] = useState<'money' | 'item'>(normalizedLoanCategory === 'item' ? 'item' : 'money');
     const [amount, setAmount] = useState(normalizedRemaining?.toString() || '');
@@ -30,6 +32,48 @@ export default function RegisterPaymentScreen() {
         }
     }, [normalizedPaymentId, user]);
 
+    const goBackToRecord = () => {
+        if (normalizedLoanId) {
+            router.replace({
+                pathname: '/loan/[id]',
+                params: { id: normalizedLoanId },
+            } as any);
+            return;
+        }
+
+        navigation.dispatch(
+            CommonActions.reset({
+                index: 0,
+                routes: [{ name: '(tabs)' as never }],
+            })
+        );
+    };
+
+    const confirmAction = (title: string, message: string, onConfirm: () => Promise<void> | void) => {
+        if (Platform.OS === 'web') {
+            const browserConfirm = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
+            const accepted = browserConfirm ? browserConfirm(`${title}\n\n${message}`) : true;
+            if (accepted) {
+                void onConfirm();
+            }
+            return;
+        }
+
+        Alert.alert(
+            title,
+            message,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Confirm',
+                    onPress: () => {
+                        void onConfirm();
+                    },
+                },
+            ]
+        );
+    };
+
     const fetchPayment = async () => {
         if (!normalizedPaymentId) return;
         setLoading(true);
@@ -41,7 +85,7 @@ export default function RegisterPaymentScreen() {
 
         if (error) {
             Alert.alert('Error', 'Could not fetch payment data');
-            router.back();
+            goBackToRecord();
         } else {
             setOriginalPayment(data);
             setPaymentMethod(data.payment_method);
@@ -58,28 +102,135 @@ export default function RegisterPaymentScreen() {
             return;
         }
 
-        if (paymentMethod === 'money' && (!amount || parseFloat(amount) <= 0)) {
-            Alert.alert('Error', 'Please enter a valid amount');
-            return;
+        const parsedMoneyAmount = Number.parseFloat(amount);
+
+        if (paymentMethod === 'money') {
+            if (!amount || Number.isNaN(parsedMoneyAmount)) {
+                Alert.alert('Error', 'Please enter a valid amount');
+                return;
+            }
+
+            if (normalizedPaymentId && parsedMoneyAmount === 0) {
+                onDeletePayment(true);
+                return;
+            }
+
+            if (parsedMoneyAmount < 0) {
+                Alert.alert('Error', 'Amount cannot be negative');
+                return;
+            }
+
+            if (!normalizedPaymentId && parsedMoneyAmount <= 0) {
+                Alert.alert('Error', 'Please enter a valid amount');
+                return;
+            }
         }
         if (paymentMethod === 'item' && !returnedItem) {
             Alert.alert('Error', 'Please describe the item being returned/exchanged');
             return;
         }
 
-        Alert.alert(
+        confirmAction(
             normalizedPaymentId ? 'Update Payment' : 'Confirm Payment',
             `Are you sure you want to ${normalizedPaymentId ? 'update' : 'register'} this ${paymentMethod === 'money' ? 'payment' : 'item return'}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Confirm',
-                    onPress: async () => {
-                        await performSave();
-                    }
-                }
-            ]
+            async () => {
+                await performSave();
+            }
         );
+    };
+
+    const syncLoanStatus = async () => {
+        if (!normalizedLoanId) return;
+
+        const { data: loanSnapshot, error: loanSnapshotError } = await supabase
+            .from('loans')
+            .select('id, category, amount')
+            .eq('id', normalizedLoanId)
+            .single();
+
+        if (loanSnapshotError || !loanSnapshot) {
+            return;
+        }
+
+        const { data: itemSettlement } = await supabase
+            .from('payments')
+            .select('id')
+            .eq('loan_id', normalizedLoanId)
+            .eq('payment_method', 'item')
+            .limit(1);
+
+        const hasItemSettlement = (itemSettlement?.length || 0) > 0;
+        if (hasItemSettlement) {
+            await supabase
+                .from('loans')
+                .update({ status: 'paid' })
+                .eq('id', normalizedLoanId);
+            return;
+        }
+
+        const { data: allMoneyPayments } = await supabase
+            .from('payments')
+            .select('amount')
+            .eq('loan_id', normalizedLoanId)
+            .eq('payment_method', 'money');
+
+        const totalPaid = (allMoneyPayments || []).reduce((acc, payment) => {
+            const parsed = Number(payment.amount);
+            return Number.isFinite(parsed) ? acc + parsed : acc;
+        }, 0);
+
+        const loanAmount = Number(loanSnapshot.amount);
+        let nextStatus: 'active' | 'partial' | 'paid' = 'active';
+
+        if (Number.isFinite(loanAmount) && loanAmount > 0) {
+            if (totalPaid >= loanAmount) nextStatus = 'paid';
+            else if (totalPaid > 0) nextStatus = 'partial';
+        }
+
+        await supabase
+            .from('loans')
+            .update({ status: nextStatus })
+            .eq('id', normalizedLoanId);
+    };
+
+    const onDeletePayment = (fromZeroAmount = false) => {
+        if (!normalizedPaymentId) return;
+
+        confirmAction(
+            'Delete Payment',
+            fromZeroAmount
+                ? 'Amount set to 0 means this payment will be deleted. Do you want to continue?'
+                : 'Are you sure you want to delete this payment? This action cannot be undone.',
+            async () => {
+                await performDeletePayment();
+            }
+        );
+    };
+
+    const performDeletePayment = async () => {
+        if (!normalizedPaymentId || !normalizedLoanId || !user?.id) {
+            Alert.alert('Error', 'Payment not found');
+            return;
+        }
+
+        setLoading(true);
+
+        const { error: deleteError } = await supabase
+            .from('payments')
+            .delete()
+            .eq('id', normalizedPaymentId)
+            .eq('loan_id', normalizedLoanId);
+
+        if (deleteError) {
+            Alert.alert('Error', deleteError.message);
+            setLoading(false);
+            return;
+        }
+
+        await syncLoanStatus();
+        setLoading(false);
+        Alert.alert('Success', 'Payment deleted');
+        goBackToRecord();
     };
 
     const performSave = async () => {
@@ -88,6 +239,8 @@ export default function RegisterPaymentScreen() {
             return;
         }
 
+        const parsedMoneyAmount = Number.parseFloat(amount);
+        const moneyAmountValue = Number.isNaN(parsedMoneyAmount) ? null : parsedMoneyAmount;
         setLoading(true);
 
         // Fetch target_user_id from loan
@@ -104,7 +257,7 @@ export default function RegisterPaymentScreen() {
             const { error: updateError } = await supabase
                 .from('payments')
                 .update({
-                    amount: paymentMethod === 'money' ? parseFloat(amount) : null,
+                    amount: paymentMethod === 'money' ? moneyAmountValue : null,
                     payment_method: paymentMethod,
                     returned_item_name: paymentMethod === 'item' ? returnedItem.trim() : null,
                     note: note.trim() || null,
@@ -124,7 +277,7 @@ export default function RegisterPaymentScreen() {
                     payment_id: normalizedPaymentId,
                     changed_by: user?.id,
                     old_amount: originalPayment.amount,
-                    new_amount: paymentMethod === 'money' ? parseFloat(amount) : null,
+                    new_amount: paymentMethod === 'money' ? moneyAmountValue : null,
                     old_note: originalPayment.note,
                     new_note: note.trim() || null,
                     old_item_name: originalPayment.returned_item_name,
@@ -154,7 +307,7 @@ export default function RegisterPaymentScreen() {
                     loan_id: normalizedLoanId,
                     user_id: user?.id,
                     target_user_id: targetUserId,
-                    amount: paymentMethod === 'money' ? parseFloat(amount) : null,
+                    amount: paymentMethod === 'money' ? moneyAmountValue : null,
                     payment_method: paymentMethod,
                     returned_item_name: paymentMethod === 'item' ? returnedItem.trim() : null,
                     note: note.trim() || null,
@@ -185,41 +338,9 @@ export default function RegisterPaymentScreen() {
             }
         }
 
-        // 2. Calculate new status
-        // For items, if it's an item loan and an item is returned, we can mark as paid.
-        // For money, we check totals.
-        if (paymentMethod === 'item') {
-            const { error: updateError } = await supabase
-                .from('loans')
-                .update({ status: 'paid' })
-                .eq('id', normalizedLoanId);
+        await syncLoanStatus();
 
-            if (updateError) console.error(updateError);
-        } else {
-            const { data: allPayments } = await supabase
-                .from('payments')
-                .select('amount')
-                .eq('loan_id', normalizedLoanId)
-                .eq('payment_method', 'money');
-
-            const { data: loan } = await supabase
-                .from('loans')
-                .select('amount')
-                .eq('id', normalizedLoanId)
-                .single();
-
-            if (loan) {
-                const totalPaid = (allPayments || []).reduce((acc, p) => acc + Number(p.amount), 0);
-                const newStatus = totalPaid >= Number(loan.amount) ? 'paid' : 'partial';
-
-                await supabase
-                    .from('loans')
-                    .update({ status: newStatus })
-                    .eq('id', normalizedLoanId);
-            }
-        }
-
-        router.back();
+        goBackToRecord();
         setLoading(false);
     };
 
@@ -230,7 +351,7 @@ export default function RegisterPaymentScreen() {
                 headerTransparent: true,
                 headerTintColor: '#0F172A',
                 headerLeft: () => (
-                    <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
+                    <TouchableOpacity onPress={goBackToRecord} style={styles.closeBtn}>
                         <X size={24} color="#0F172A" />
                     </TouchableOpacity>
                 ),
@@ -321,7 +442,18 @@ export default function RegisterPaymentScreen() {
                         <Text style={styles.saveButtonText}>{loading ? 'PROCESSING...' : (normalizedPaymentId ? 'Update Payment' : 'Confirm Payment')}</Text>
                     </TouchableOpacity>
 
-                    <Text style={styles.copyright}>© 2026 jreynoso — I GOT YOU</Text>
+                    {normalizedPaymentId && (
+                        <TouchableOpacity
+                            onPress={() => onDeletePayment(false)}
+                            disabled={loading}
+                            style={[styles.deleteButton, loading && { opacity: 0.7 }]}
+                        >
+                            <Trash2 size={18} color="#EF4444" />
+                            <Text style={styles.deleteButtonText}>Delete Payment</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    <Text style={styles.copyright}>© 2026 jreynoso — I GOT U</Text>
                 </View>
             </KeyboardAvoidingView>
         </Screen>
@@ -452,6 +584,23 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '800',
         letterSpacing: 0.5,
+    },
+    deleteButton: {
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#FECACA',
+        backgroundColor: '#FEF2F2',
+        padding: 16,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 8,
+    },
+    deleteButtonText: {
+        color: '#EF4444',
+        fontSize: 16,
+        fontWeight: '800',
     },
     copyright: {
         textAlign: 'center',

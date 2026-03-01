@@ -21,6 +21,32 @@ export default function NewContactScreen() {
         }
     }, [contactId, user]);
 
+    const confirmAction = (title: string, message: string, onConfirm: () => Promise<void> | void) => {
+        if (Platform.OS === 'web') {
+            const browserConfirm = typeof globalThis.confirm === 'function' ? globalThis.confirm : null;
+            const accepted = browserConfirm ? browserConfirm(`${title}\n\n${message}`) : true;
+            if (accepted) {
+                void onConfirm();
+            }
+            return;
+        }
+
+        Alert.alert(
+            title,
+            message,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                        void onConfirm();
+                    },
+                },
+            ]
+        );
+    };
+
     const fetchContact = async () => {
         if (!contactId || !user?.id) return;
         setLoading(true);
@@ -115,19 +141,12 @@ export default function NewContactScreen() {
             return;
         }
 
-        Alert.alert(
+        confirmAction(
             'Delete Contact',
             'Are you sure you want to delete this contact? This will not affect existing loans.',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => {
-                        void confirmDelete();
-                    },
-                }
-            ]
+            async () => {
+                await confirmDelete();
+            }
         );
     };
 
@@ -141,24 +160,31 @@ export default function NewContactScreen() {
             setLoading(true);
 
             // Try hard delete first.
-            const { error: hardDeleteError, count } = await supabase
+            const { data: hardDeletedRows, error: hardDeleteError } = await supabase
                 .from('contacts')
-                .delete({ count: 'exact' })
+                .delete()
                 .eq('id', contactId)
-                .eq('user_id', user.id);
+                .eq('user_id', user.id)
+                .select('id');
 
-            if (!hardDeleteError && (count ?? 0) > 0) {
+            if (!hardDeleteError && hardDeletedRows && hardDeletedRows.length > 0) {
                 Alert.alert('Success', 'Contact deleted');
                 router.replace('/(tabs)/contacts');
                 return;
             }
 
-            // If hard delete fails (usually FK), soft delete the contact.
+            // If hard delete fails because of FK references, soft delete the contact.
+            if (hardDeleteError && hardDeleteError.code !== '23503') {
+                Alert.alert('Error', hardDeleteError.message);
+                return;
+            }
+
             const { data: softData, error: softDeleteError } = await supabase
                 .from('contacts')
                 .update({ deleted_at: new Date().toISOString() })
                 .eq('id', contactId)
                 .eq('user_id', user.id)
+                .is('deleted_at', null)
                 .select('id');
 
             if (softDeleteError) {
@@ -252,7 +278,7 @@ export default function NewContactScreen() {
                     </TouchableOpacity>
                 )}
 
-                <Text style={styles.copyright}>© 2026 jreynoso — I GOT YOU</Text>
+                <Text style={styles.copyright}>© 2026 jreynoso — I GOT U</Text>
             </View>
         </KeyboardAvoidingView>
     );

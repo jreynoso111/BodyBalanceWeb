@@ -30,6 +30,7 @@ export default function SettingsScreen() {
                 reminder_enabled: data.reminder_enabled,
                 biometric_enabled: data.biometric_enabled,
                 marketing_enabled: data.marketing_enabled,
+                preferred_currencies: data.preferred_currencies,
             });
         }
     };
@@ -93,7 +94,7 @@ export default function SettingsScreen() {
                     <Text style={styles.signOutText}>Sign Out</Text>
                 </TouchableOpacity>
 
-                <Text style={styles.version}>I GOT YOU v1.0.0 • jreynoso</Text>
+                <Text style={styles.version}>I GOT U v1.0.0 • jreynoso</Text>
             </ScrollView>
         </Screen>
     );

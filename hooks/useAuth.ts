@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { usePathname, useRouter } from 'expo-router';
+import { usePathname, useRouter, useSegments } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +10,7 @@ export const useAuth = () => {
     const { setSession, setUser, setInitialized, session, initialized } = useAuthStore();
     const pathname = usePathname();
     const router = useRouter();
+    const segments = useSegments();
 
     useEffect(() => {
         // 1. Initial session check
@@ -40,25 +41,46 @@ export const useAuth = () => {
         if (!pathname) return;
 
         const normalizedPath = pathname.toLowerCase();
-        const isLandingPage = normalizedPath === '/';
+        const topSegment = segments[0];
+        const inTabsRoute = topSegment === '(tabs)';
         const inAuthRoute =
+            topSegment === '(auth)' ||
+            normalizedPath.startsWith('/auth/callback') ||
             normalizedPath.startsWith('/login') ||
+            normalizedPath.startsWith('/register') ||
             normalizedPath.startsWith('/forgot-password') ||
             normalizedPath.startsWith('/reset-password');
+        const isLandingPage = normalizedPath === '/' && !inTabsRoute;
         const isResetPassword = normalizedPath.startsWith('/reset-password');
+        const isEphemeralFormRoute =
+            normalizedPath.startsWith('/new-contact') ||
+            normalizedPath.startsWith('/new-loan') ||
+            normalizedPath.startsWith('/register-payment');
 
         const handleRouting = async () => {
-            if (session && !inAuthRoute && !isLandingPage) {
+            if (session && !inAuthRoute && !isLandingPage && !isEphemeralFormRoute) {
                 // Keep track of last protected route for refresh/reload recovery.
                 await AsyncStorage.setItem(LAST_PROTECTED_PATH_KEY, pathname);
             }
 
             if (session && isLandingPage) {
                 const lastPath = await AsyncStorage.getItem(LAST_PROTECTED_PATH_KEY);
-                if (lastPath && lastPath !== pathname) {
+                const hasSafeRecoverPath =
+                    !!lastPath &&
+                    lastPath !== pathname &&
+                    !lastPath.startsWith('/new-contact') &&
+                    !lastPath.startsWith('/new-loan') &&
+                    !lastPath.startsWith('/register-payment');
+
+                if (hasSafeRecoverPath) {
                     router.replace(lastPath as any);
                     return;
                 }
+
+                await AsyncStorage.removeItem(LAST_PROTECTED_PATH_KEY);
+                // Fallback to authenticated home when there is no recoverable path.
+                router.replace('/(tabs)');
+                return;
             }
 
             if (!session && !inAuthRoute && !isLandingPage) {
@@ -71,5 +93,5 @@ export const useAuth = () => {
         };
 
         void handleRouting();
-    }, [session, pathname, initialized]);
+    }, [session, pathname, initialized, segments]);
 };
