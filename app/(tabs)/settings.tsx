@@ -5,9 +5,34 @@ import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { LogOut, User, Bell, Shield, CircleHelp, FileOutput, ChevronRight } from 'lucide-react-native';
 import { exportLoansToCSV } from '@/services/exportService';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { DEFAULT_USER_PREFERENCES, getOrCreateUserPreferences } from '@/services/userPreferences';
 
 export default function SettingsScreen() {
     const { user } = useAuthStore();
+    const router = useRouter();
+    const [prefs, setPrefs] = React.useState(DEFAULT_USER_PREFERENCES);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            if (!user?.id) return;
+            void loadPreferences();
+        }, [user?.id])
+    );
+
+    const loadPreferences = async () => {
+        if (!user?.id) return;
+        const { data } = await getOrCreateUserPreferences(user.id);
+        if (data) {
+            setPrefs({
+                push_enabled: data.push_enabled,
+                email_enabled: data.email_enabled,
+                reminder_enabled: data.reminder_enabled,
+                biometric_enabled: data.biometric_enabled,
+                marketing_enabled: data.marketing_enabled,
+            });
+        }
+    };
 
     const handleSignOut = async () => {
         const { error } = await supabase.auth.signOut();
@@ -21,11 +46,11 @@ export default function SettingsScreen() {
     };
 
     const menuItems = [
-        { icon: User, label: 'Profile', sub: user?.email, onPress: () => { } },
-        { icon: Bell, label: 'Notifications', sub: 'On', onPress: () => { } },
-        { icon: Shield, label: 'Security', sub: 'FaceID', onPress: () => { } },
+        { icon: User, label: 'Profile', sub: user?.email, onPress: () => router.push('/profile') },
+        { icon: Bell, label: 'Notifications', sub: prefs.push_enabled ? 'Enabled' : 'Disabled', onPress: () => router.push('/notifications') },
+        { icon: Shield, label: 'Security', sub: prefs.biometric_enabled ? 'Biometric On' : 'Biometric Off', onPress: () => router.push('/security') },
         { icon: FileOutput, label: 'Export Data (CSV)', sub: 'Share report', onPress: handleExport },
-        { icon: CircleHelp, label: 'Help & Support', sub: '', onPress: () => { } },
+        { icon: CircleHelp, label: 'Help & Support', sub: 'FAQ & contact', onPress: () => router.push('/help-support') },
     ];
 
     return (

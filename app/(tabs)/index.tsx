@@ -8,9 +8,11 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { getCurrencySymbol } from '@/constants/Currencies';
+import { useGreetingStore } from '@/store/greetingStore';
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
+  const greeting = useGreetingStore((state) => state.greetings[state.currentIndex]);
   const [summary, setSummary] = useState({ lent: 0, borrowed: 0 });
   const [recentLoans, setRecentLoans] = useState<any[]>([]);
   const [filter, setFilter] = useState<'all' | 'lent' | 'borrowed'>('all');
@@ -35,6 +37,7 @@ export default function DashboardScreen() {
       .from('loans')
       .select('id, amount, type, status, category')
       .eq('user_id', user.id)
+      .is('deleted_at', null)
       .neq('status', 'paid')
       .eq('category', 'money');
 
@@ -63,7 +66,8 @@ export default function DashboardScreen() {
     let query = supabase
       .from('loans')
       .select('*, contacts(name)')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .is('deleted_at', null);
 
     if (filter !== 'all') {
       query = query.eq('type', filter);
@@ -114,7 +118,7 @@ export default function DashboardScreen() {
       >
         <View style={styles.header}>
           <RNView style={styles.greetingRow}>
-            <Text style={styles.greeting}>Howdy, {user?.email?.split('@')[0]}!</Text>
+            <Text style={styles.greeting}>{greeting}, {user?.email?.split('@')[0]}!</Text>
             <TouchableOpacity
               style={styles.requestIcon}
               onPress={() => router.push('/requests')}

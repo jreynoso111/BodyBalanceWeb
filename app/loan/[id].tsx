@@ -5,10 +5,11 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { ArrowLeft, Wallet, Calendar, Plus, Clock, FileText, Trash2, Edit, Box, ChevronRight, TrendingUp, TrendingDown, Zap, Activity, ShieldCheck, ShieldAlert, Shield, Bell, History, MoreHorizontal, Info, X } from 'lucide-react-native';
 import { useAuthStore } from '@/store/authStore';
-import { getCurrencySymbol } from '@/constants/Currencies';
+import { CURRENCIES, getCurrencySymbol } from '@/constants/Currencies';
 
 export default function LoanDetailScreen() {
     const { id } = useLocalSearchParams();
+    const loanId = Array.isArray(id) ? id[0] : id;
     const router = useRouter();
     const { user } = useAuthStore();
     const [loan, setLoan] = useState<any>(null);
@@ -18,60 +19,117 @@ export default function LoanDetailScreen() {
     const [note, setNote] = useState('');
     const [reminderFrequency, setReminderFrequency] = useState<string>('none');
     const [reminderInterval, setReminderInterval] = useState<string>('1');
+    const [editCurrency, setEditCurrency] = useState('USD');
+    const [editAmount, setEditAmount] = useState('');
+    const [editItemName, setEditItemName] = useState('');
+    const [editDueDate, setEditDueDate] = useState('');
     const [selectedPaymentHistory, setSelectedPaymentHistory] = useState<any[]>([]);
     const [historyModalVisible, setHistoryModalVisible] = useState(false);
 
     useEffect(() => {
+        if (!loanId || !user?.id) return;
         fetchLoanDetails();
-    }, [id, user]);
+    }, [loanId, user]);
 
     const fetchLoanDetails = async () => {
+        if (!loanId) return;
         setLoading(true);
         const { data: loanData, error: loanError } = await supabase
             .from('loans')
             .select('*, contacts(name)')
-            .eq('id', id)
-            .single();
+            .eq('id', loanId)
+            .is('deleted_at', null)
+            .maybeSingle();
 
-        if (loanError) {
-            Alert.alert('Error', loanError.message);
+        if (loanError || !loanData) {
+            Alert.alert('Error', loanError?.message || 'Loan not found');
             router.back();
+            setLoading(false);
             return;
         }
 
         const { data: paymentData } = await supabase
             .from('payments')
             .select('*')
-            .eq('loan_id', id)
+            .eq('loan_id', loanId)
             .order('payment_date', { ascending: false });
 
         setLoan(loanData);
         setNote(loanData.description || '');
         setReminderFrequency(loanData.reminder_frequency || 'none');
         setReminderInterval(loanData.reminder_interval?.toString() || '1');
+        setEditCurrency(loanData.currency || 'USD');
+        setEditAmount(loanData.amount ? String(loanData.amount) : '');
+        setEditItemName(loanData.item_name || '');
+        setEditDueDate(loanData.due_date || '');
         setPayments(paymentData || []);
         setLoading(false);
     };
 
     const handleUpdate = async () => {
-        const { error } = await supabase
+        if (!loanId || !user?.id) {
+            Alert.alert('Error', 'Loan not found');
+            return;
+        }
+
+        if (loan?.category === 'money') {
+            const parsedAmount = parseFloat(editAmount);
+            if (!editAmount || Number.isNaN(parsedAmount) || parsedAmount <= 0) {
+                Alert.alert('Error', 'Please enter a valid amount');
+                return;
+            }
+        }
+
+        if (loan?.category === 'item' && !editItemName.trim()) {
+            Alert.alert('Error', 'Item name is required');
+            return;
+        }
+
+        if (editDueDate && Number.isNaN(new Date(editDueDate).getTime())) {
+            Alert.alert('Error', 'Due date must be a valid date (YYYY-MM-DD)');
+            return;
+        }
+
+        const payload: Record<string, any> = {
+            description: note.trim() || null,
+            reminder_frequency: reminderFrequency,
+            reminder_interval: parseInt(reminderInterval) || 1,
+            due_date: editDueDate || null,
+        };
+
+        if (loan?.category === 'money') {
+            payload.currency = editCurrency;
+            payload.amount = parseFloat(editAmount);
+            payload.item_name = null;
+        } else {
+            payload.item_name = editItemName.trim();
+        }
+
+        const { data, error } = await supabase
             .from('loans')
-            .update({
-                description: note,
-                reminder_frequency: reminderFrequency,
-                reminder_interval: parseInt(reminderInterval) || 1
-            })
-            .eq('id', id);
+            .update(payload)
+            .eq('id', loanId)
+            .eq('user_id', user.id)
+            .is('deleted_at', null)
+            .select('id');
 
         if (error) {
             Alert.alert('Error', error.message);
+        } else if (!data || data.length === 0) {
+            Alert.alert('Error', 'Loan could not be updated');
         } else {
+            Alert.alert('Success', 'Loan updated');
             setIsEditing(false);
             fetchLoanDetails();
         }
     };
 
     const handleDelete = async () => {
+        if (!loanId || !user?.id) {
+            Alert.alert('Error', 'Loan not found');
+            return;
+        }
+
         Alert.alert(
             'Delete Record',
             'Are you sure you want to delete this loan? This action is undoable only by contact supports.',
@@ -80,21 +138,59 @@ export default function LoanDetailScreen() {
                 {
                     text: 'Delete',
                     style: 'destructive',
-                    onPress: async () => {
-                        const { error } = await supabase
-                            .from('loans')
-                            .update({ deleted_at: new Date().toISOString() })
-                            .eq('id', id);
-
-                        if (error) {
-                            Alert.alert('Error', error.message);
-                        } else {
-                            router.replace('/(tabs)');
-                        }
-                    }
+                    onPress: () => {
+                        void confirmDelete();
+                    },
                 }
             ]
         );
+    };
+
+    const confirmDelete = async () => {
+        if (!loanId || !user?.id) {
+            Alert.alert('Error', 'Loan not found');
+            return;
+        }
+
+        try {
+            setLoading(true);
+
+            const { error: hardDeleteError, count } = await supabase
+                .from('loans')
+                .delete({ count: 'exact' })
+                .eq('id', loanId)
+                .eq('user_id', user.id);
+
+            if (!hardDeleteError && (count ?? 0) > 0) {
+                Alert.alert('Success', 'Loan deleted');
+                router.replace('/(tabs)');
+                return;
+            }
+
+            const { data, error } = await supabase
+                .from('loans')
+                .update({ deleted_at: new Date().toISOString() })
+                .eq('id', loanId)
+                .eq('user_id', user.id)
+                .select('id');
+
+            if (error) {
+                Alert.alert('Error', error.message);
+                return;
+            }
+
+            if (!data || data.length === 0) {
+                Alert.alert('Error', 'Loan could not be deleted');
+                return;
+            }
+
+            Alert.alert('Success', 'Loan deleted');
+            router.replace('/(tabs)');
+        } catch (error: any) {
+            Alert.alert('Error', error?.message || 'Unexpected error deleting loan');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const fetchPaymentHistory = async (paymentId: string) => {
@@ -206,6 +302,65 @@ export default function LoanDetailScreen() {
                         </RNView>
                     </RNView>
 
+                    {!isEditing && (
+                        <TouchableOpacity style={styles.saveNoteBtn} onPress={() => setIsEditing(true)}>
+                            <Text style={styles.saveNoteText}>Edit Record</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {isEditing && (
+                        <RNView>
+                            {loan.category === 'money' ? (
+                                <RNView>
+                                    <Text style={styles.label}>Currency</Text>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencySelector}>
+                                        {CURRENCIES.map((c) => (
+                                            <TouchableOpacity
+                                                key={c.code}
+                                                onPress={() => setEditCurrency(c.code)}
+                                                style={[styles.currencyChip, editCurrency === c.code && styles.currencyChipActive]}
+                                            >
+                                                <Text style={[styles.currencyChipText, editCurrency === c.code && styles.currencyChipTextActive]}>
+                                                    {c.code}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </ScrollView>
+
+                                    <Text style={styles.label}>Amount</Text>
+                                    <TextInput
+                                        placeholder="0.00"
+                                        placeholderTextColor="#94A3B8"
+                                        value={editAmount}
+                                        onChangeText={setEditAmount}
+                                        keyboardType="decimal-pad"
+                                        style={styles.input}
+                                    />
+                                </RNView>
+                            ) : (
+                                <RNView>
+                                    <Text style={styles.label}>Item Name</Text>
+                                    <TextInput
+                                        placeholder="Item name"
+                                        placeholderTextColor="#94A3B8"
+                                        value={editItemName}
+                                        onChangeText={setEditItemName}
+                                        style={styles.input}
+                                    />
+                                </RNView>
+                            )}
+
+                            <Text style={styles.label}>Due Date</Text>
+                            <TextInput
+                                placeholder="YYYY-MM-DD"
+                                placeholderTextColor="#94A3B8"
+                                value={editDueDate}
+                                onChangeText={setEditDueDate}
+                                style={styles.input}
+                            />
+                        </RNView>
+                    )}
+
                     <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Description</Text>
                     {isEditing ? (
                         <RNView style={styles.editWrapper}>
@@ -218,7 +373,7 @@ export default function LoanDetailScreen() {
                                 placeholderTextColor="#94A3B8"
                             />
                             <TouchableOpacity style={styles.saveNoteBtn} onPress={handleUpdate}>
-                                <Text style={styles.saveNoteText}>Update Notes</Text>
+                                <Text style={styles.saveNoteText}>Save Changes</Text>
                             </TouchableOpacity>
                         </RNView>
                     ) : (
@@ -460,7 +615,8 @@ export default function LoanDetailScreen() {
                             const { error } = await supabase
                                 .from('loans')
                                 .update({ status: 'paid' })
-                                .eq('id', id);
+                                .eq('id', loanId)
+                                .eq('user_id', user?.id);
                             if (!error) fetchLoanDetails();
                         }}
                     >

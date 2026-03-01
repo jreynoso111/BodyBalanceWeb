@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
-import { useRouter, useSegments } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const LAST_PROTECTED_PATH_KEY = 'last_protected_path';
 
 export const useAuth = () => {
     const { setSession, setUser, setInitialized, session, initialized } = useAuthStore();
-    const segments = useSegments();
+    const pathname = usePathname();
     const router = useRouter();
 
     useEffect(() => {
@@ -34,17 +37,39 @@ export const useAuth = () => {
 
     useEffect(() => {
         if (!initialized) return;
+        if (!pathname) return;
 
-        const inAuthGroup = (segments as any)[0] === '(auth)';
-        const isLandingPage = (segments as any).length === 0 || (segments as any)[0] === '' || (segments as any)[0] === undefined;
-        const isResetPassword = (segments as any).includes('reset-password');
+        const normalizedPath = pathname.toLowerCase();
+        const isLandingPage = normalizedPath === '/';
+        const inAuthRoute =
+            normalizedPath.startsWith('/login') ||
+            normalizedPath.startsWith('/forgot-password') ||
+            normalizedPath.startsWith('/reset-password');
+        const isResetPassword = normalizedPath.startsWith('/reset-password');
 
-        if (!session && !inAuthGroup && !isLandingPage) {
-            // User is not signed in and not in the auth group or landing page, redirect to login
-            router.replace('/(auth)/login');
-        } else if (session && inAuthGroup && !isResetPassword) {
-            // User is signed in and in the auth group, redirect to home
-            router.replace('/(tabs)');
-        }
-    }, [session, segments, initialized]);
+        const handleRouting = async () => {
+            if (session && !inAuthRoute && !isLandingPage) {
+                // Keep track of last protected route for refresh/reload recovery.
+                await AsyncStorage.setItem(LAST_PROTECTED_PATH_KEY, pathname);
+            }
+
+            if (session && isLandingPage) {
+                const lastPath = await AsyncStorage.getItem(LAST_PROTECTED_PATH_KEY);
+                if (lastPath && lastPath !== pathname) {
+                    router.replace(lastPath as any);
+                    return;
+                }
+            }
+
+            if (!session && !inAuthRoute && !isLandingPage) {
+                // User is not signed in and not in the auth group or landing page, redirect to login
+                router.replace('/(auth)/login');
+            } else if (session && inAuthRoute && !isResetPassword) {
+                // User is signed in and in the auth group, redirect to home
+                router.replace('/(tabs)');
+            }
+        };
+
+        void handleRouting();
+    }, [session, pathname, initialized]);
 };

@@ -9,24 +9,31 @@ export default function NewContactScreen() {
     const { user } = useAuthStore();
     const router = useRouter();
     const { id } = useLocalSearchParams();
+    const contactId = Array.isArray(id) ? id[0] : id;
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (id) {
+        if (contactId) {
             fetchContact();
         }
-    }, [id, user]);
+    }, [contactId, user]);
 
     const fetchContact = async () => {
+        if (!contactId || !user?.id) return;
         setLoading(true);
         const { data, error } = await supabase
             .from('contacts')
             .select('*')
-            .eq('id', id)
+            .eq('id', contactId)
+            .eq('user_id', user.id)
             .single();
+
+        if (error) {
+            Alert.alert('Error', error.message);
+        }
 
         if (data) {
             setName(data.name);
@@ -56,7 +63,13 @@ export default function NewContactScreen() {
             }
         }
 
-        if (id) {
+        if (contactId) {
+            if (!user?.id) {
+                Alert.alert('Error', 'User not found');
+                setLoading(false);
+                return;
+            }
+
             const { error } = await supabase
                 .from('contacts')
                 .update({
@@ -65,7 +78,8 @@ export default function NewContactScreen() {
                     phone: phone.trim() || null,
                     target_user_id: targetUserId,
                 })
-                .eq('id', id);
+                .eq('id', contactId)
+                .eq('user_id', user.id);
 
             if (error) {
                 Alert.alert('Error', error.message);
@@ -96,6 +110,11 @@ export default function NewContactScreen() {
     };
 
     const handleDelete = async () => {
+        if (!contactId || !user?.id) {
+            Alert.alert('Error', 'Contact not found');
+            return;
+        }
+
         Alert.alert(
             'Delete Contact',
             'Are you sure you want to delete this contact? This will not affect existing loans.',
@@ -104,21 +123,61 @@ export default function NewContactScreen() {
                 {
                     text: 'Delete',
                     style: 'destructive',
-                    onPress: async () => {
-                        const { error } = await supabase
-                            .from('contacts')
-                            .update({ deleted_at: new Date().toISOString() })
-                            .eq('id', id);
-
-                        if (error) {
-                            Alert.alert('Error', error.message);
-                        } else {
-                            router.back();
-                        }
-                    }
+                    onPress: () => {
+                        void confirmDelete();
+                    },
                 }
             ]
         );
+    };
+
+    const confirmDelete = async () => {
+        if (!contactId || !user?.id) {
+            Alert.alert('Error', 'Contact not found');
+            return;
+        }
+
+        try {
+            setLoading(true);
+
+            // Try hard delete first.
+            const { error: hardDeleteError, count } = await supabase
+                .from('contacts')
+                .delete({ count: 'exact' })
+                .eq('id', contactId)
+                .eq('user_id', user.id);
+
+            if (!hardDeleteError && (count ?? 0) > 0) {
+                Alert.alert('Success', 'Contact deleted');
+                router.replace('/(tabs)/contacts');
+                return;
+            }
+
+            // If hard delete fails (usually FK), soft delete the contact.
+            const { data: softData, error: softDeleteError } = await supabase
+                .from('contacts')
+                .update({ deleted_at: new Date().toISOString() })
+                .eq('id', contactId)
+                .eq('user_id', user.id)
+                .select('id');
+
+            if (softDeleteError) {
+                Alert.alert('Error', softDeleteError.message);
+                return;
+            }
+
+            if (!softData || softData.length === 0) {
+                Alert.alert('Error', 'Contact could not be deleted');
+                return;
+            }
+
+            Alert.alert('Success', 'Contact deleted');
+            router.replace('/(tabs)/contacts');
+        } catch (error: any) {
+            Alert.alert('Error', error?.message || 'Unexpected error deleting contact');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -127,7 +186,7 @@ export default function NewContactScreen() {
             style={styles.container}
         >
             <Stack.Screen options={{
-                title: id ? 'Edit Contact' : 'New Contact',
+                title: contactId ? 'Edit Contact' : 'New Contact',
                 headerLeft: () => (
                     <TouchableOpacity onPress={() => router.back()}>
                         <X size={24} color="#000" />
@@ -179,10 +238,10 @@ export default function NewContactScreen() {
                     disabled={loading}
                     style={styles.saveButton}
                 >
-                    <Text style={styles.saveButtonText}>{loading ? 'Saving...' : (id ? 'Update Contact' : 'Save Contact')}</Text>
+                    <Text style={styles.saveButtonText}>{loading ? 'Saving...' : (contactId ? 'Update Contact' : 'Save Contact')}</Text>
                 </TouchableOpacity>
 
-                {id && (
+                {contactId && (
                     <TouchableOpacity
                         onPress={handleDelete}
                         disabled={loading}

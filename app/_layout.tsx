@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { registerForPushNotificationsAsync } from '@/services/notificationService';
 import * as Notifications from 'expo-notifications';
 import { useColorScheme } from '@/components/useColorScheme';
+import { GreetingRotator } from '@/components/GreetingRotator';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -68,6 +69,7 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <GreetingRotator />
       <AnimatedBackground>
         <Stack
           screenOptions={{
@@ -88,6 +90,10 @@ function RootLayoutNav() {
           <Stack.Screen name="loan/[id]" options={{ title: 'Loan Details' }} />
           <Stack.Screen name="new-loan" options={{ title: 'New Loan' }} />
           <Stack.Screen name="new-contact" options={{ title: 'New Contact' }} />
+          <Stack.Screen name="profile" options={{ title: 'Profile' }} />
+          <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
+          <Stack.Screen name="security" options={{ title: 'Security' }} />
+          <Stack.Screen name="help-support" options={{ title: 'Help & Support' }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
       </AnimatedBackground>

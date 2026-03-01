@@ -9,28 +9,34 @@ import { getCurrencySymbol } from '@/constants/Currencies';
 
 export default function RegisterPaymentScreen() {
     const { loanId, remaining, category: loanCategory, currency, paymentId } = useLocalSearchParams();
+    const normalizedLoanId = Array.isArray(loanId) ? loanId[0] : loanId;
+    const normalizedPaymentId = Array.isArray(paymentId) ? paymentId[0] : paymentId;
+    const normalizedLoanCategory = Array.isArray(loanCategory) ? loanCategory[0] : loanCategory;
+    const normalizedCurrency = Array.isArray(currency) ? currency[0] : currency;
+    const normalizedRemaining = Array.isArray(remaining) ? remaining[0] : remaining;
     const { user } = useAuthStore();
     const router = useRouter();
 
-    const [paymentMethod, setPaymentMethod] = useState<'money' | 'item'>(loanCategory === 'item' ? 'item' : 'money');
-    const [amount, setAmount] = useState(remaining?.toString() || '');
+    const [paymentMethod, setPaymentMethod] = useState<'money' | 'item'>(normalizedLoanCategory === 'item' ? 'item' : 'money');
+    const [amount, setAmount] = useState(normalizedRemaining?.toString() || '');
     const [returnedItem, setReturnedItem] = useState('');
     const [note, setNote] = useState('');
     const [loading, setLoading] = useState(false);
     const [originalPayment, setOriginalPayment] = useState<any>(null);
 
     useEffect(() => {
-        if (paymentId) {
+        if (normalizedPaymentId) {
             fetchPayment();
         }
-    }, [paymentId, user]);
+    }, [normalizedPaymentId, user]);
 
     const fetchPayment = async () => {
+        if (!normalizedPaymentId) return;
         setLoading(true);
         const { data, error } = await supabase
             .from('payments')
             .select('*')
-            .eq('id', paymentId)
+            .eq('id', normalizedPaymentId)
             .single();
 
         if (error) {
@@ -47,6 +53,11 @@ export default function RegisterPaymentScreen() {
     };
 
     const onSave = async () => {
+        if (!normalizedLoanId || !user?.id) {
+            Alert.alert('Error', 'Loan not found');
+            return;
+        }
+
         if (paymentMethod === 'money' && (!amount || parseFloat(amount) <= 0)) {
             Alert.alert('Error', 'Please enter a valid amount');
             return;
@@ -57,8 +68,8 @@ export default function RegisterPaymentScreen() {
         }
 
         Alert.alert(
-            paymentId ? 'Update Payment' : 'Confirm Payment',
-            `Are you sure you want to ${paymentId ? 'update' : 'register'} this ${paymentMethod === 'money' ? 'payment' : 'item return'}?`,
+            normalizedPaymentId ? 'Update Payment' : 'Confirm Payment',
+            `Are you sure you want to ${normalizedPaymentId ? 'update' : 'register'} this ${paymentMethod === 'money' ? 'payment' : 'item return'}?`,
             [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -72,18 +83,23 @@ export default function RegisterPaymentScreen() {
     };
 
     const performSave = async () => {
+        if (!normalizedLoanId || !user?.id) {
+            Alert.alert('Error', 'Loan not found');
+            return;
+        }
+
         setLoading(true);
 
         // Fetch target_user_id from loan
         const { data: loanData } = await supabase
             .from('loans')
             .select('target_user_id')
-            .eq('id', loanId)
+            .eq('id', normalizedLoanId)
             .single();
 
         const targetUserId = loanData?.target_user_id;
 
-        if (paymentId) {
+        if (normalizedPaymentId) {
             // 1. Update Payment
             const { error: updateError } = await supabase
                 .from('payments')
@@ -94,7 +110,7 @@ export default function RegisterPaymentScreen() {
                     note: note.trim() || null,
                     validation_status: targetUserId ? 'pending' : 'none',
                 })
-                .eq('id', paymentId);
+                .eq('id', normalizedPaymentId);
 
             if (updateError) {
                 Alert.alert('Error', updateError.message);
@@ -105,7 +121,7 @@ export default function RegisterPaymentScreen() {
             // 2. Log History
             await supabase.from('payment_history').insert([
                 {
-                    payment_id: paymentId,
+                    payment_id: normalizedPaymentId,
                     changed_by: user?.id,
                     old_amount: originalPayment.amount,
                     new_amount: paymentMethod === 'money' ? parseFloat(amount) : null,
@@ -122,8 +138,8 @@ export default function RegisterPaymentScreen() {
                 await supabase.from('p2p_requests').insert([
                     {
                         type: 'payment_validation',
-                        loan_id: loanId,
-                        payment_id: paymentId,
+                        loan_id: normalizedLoanId,
+                        payment_id: normalizedPaymentId,
                         from_user_id: user?.id,
                         to_user_id: targetUserId,
                         message: `A payment has been modified. Please review.`,
@@ -135,7 +151,7 @@ export default function RegisterPaymentScreen() {
             // 1. Insert Payment
             const { data: newPayment, error: paymentError } = await supabase.from('payments').insert([
                 {
-                    loan_id: loanId,
+                    loan_id: normalizedLoanId,
                     user_id: user?.id,
                     target_user_id: targetUserId,
                     amount: paymentMethod === 'money' ? parseFloat(amount) : null,
@@ -158,7 +174,7 @@ export default function RegisterPaymentScreen() {
                 await supabase.from('p2p_requests').insert([
                     {
                         type: 'payment_validation',
-                        loan_id: loanId,
+                        loan_id: normalizedLoanId,
                         payment_id: newPayment.id,
                         from_user_id: user?.id,
                         to_user_id: targetUserId,
@@ -176,20 +192,20 @@ export default function RegisterPaymentScreen() {
             const { error: updateError } = await supabase
                 .from('loans')
                 .update({ status: 'paid' })
-                .eq('id', loanId);
+                .eq('id', normalizedLoanId);
 
             if (updateError) console.error(updateError);
         } else {
             const { data: allPayments } = await supabase
                 .from('payments')
                 .select('amount')
-                .eq('loan_id', loanId)
+                .eq('loan_id', normalizedLoanId)
                 .eq('payment_method', 'money');
 
             const { data: loan } = await supabase
                 .from('loans')
                 .select('amount')
-                .eq('id', loanId)
+                .eq('id', normalizedLoanId)
                 .single();
 
             if (loan) {
@@ -199,7 +215,7 @@ export default function RegisterPaymentScreen() {
                 await supabase
                     .from('loans')
                     .update({ status: newStatus })
-                    .eq('id', loanId);
+                    .eq('id', normalizedLoanId);
             }
         }
 
@@ -210,7 +226,7 @@ export default function RegisterPaymentScreen() {
     return (
         <Screen style={styles.container}>
             <Stack.Screen options={{
-                title: paymentId ? 'Edit Payment' : 'Register Payment',
+                title: normalizedPaymentId ? 'Edit Payment' : 'Register Payment',
                 headerTransparent: true,
                 headerTintColor: '#0F172A',
                 headerLeft: () => (
@@ -249,7 +265,7 @@ export default function RegisterPaymentScreen() {
                                 <Text style={styles.label}>Amount Paid</Text>
                             </ThemedView>
                             <ThemedView style={styles.amountInputContainer}>
-                                <Text style={styles.currencySymbol}>{getCurrencySymbol(currency as string)}</Text>
+                                <Text style={styles.currencySymbol}>{getCurrencySymbol(normalizedCurrency as string)}</Text>
                                 <TextInput
                                     placeholder="0.00"
                                     placeholderTextColor="#CBD5E1"
@@ -262,7 +278,7 @@ export default function RegisterPaymentScreen() {
                             </ThemedView>
                             <ThemedView style={styles.helperRow}>
                                 <Info size={14} color="#64748B" />
-                                <Text style={styles.helperText}>Remaining balance: {getCurrencySymbol(currency as string)}{Number(remaining).toLocaleString()}</Text>
+                                <Text style={styles.helperText}>Remaining balance: {getCurrencySymbol(normalizedCurrency as string)}{Number(normalizedRemaining).toLocaleString()}</Text>
                             </ThemedView>
                         </Card>
                     ) : (
@@ -281,7 +297,7 @@ export default function RegisterPaymentScreen() {
                             />
                             <ThemedView style={styles.helperRow}>
                                 <Info size={14} color="#64748B" />
-                                <Text style={styles.helperText}>Closing this {loanCategory === 'item' ? 'item lending' : 'money loan'} with an item exchange.</Text>
+                                <Text style={styles.helperText}>Closing this {normalizedLoanCategory === 'item' ? 'item lending' : 'money loan'} with an item exchange.</Text>
                             </ThemedView>
                         </Card>
                     )}
@@ -302,7 +318,7 @@ export default function RegisterPaymentScreen() {
                         disabled={loading}
                         style={[styles.saveButton, loading && { opacity: 0.7 }]}
                     >
-                        <Text style={styles.saveButtonText}>{loading ? 'PROCESSING...' : (paymentId ? 'Update Payment' : 'Confirm Payment')}</Text>
+                        <Text style={styles.saveButtonText}>{loading ? 'PROCESSING...' : (normalizedPaymentId ? 'Update Payment' : 'Confirm Payment')}</Text>
                     </TouchableOpacity>
 
                     <Text style={styles.copyright}>© 2026 jreynoso — I GOT YOU</Text>
