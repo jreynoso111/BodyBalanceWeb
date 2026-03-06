@@ -12,9 +12,9 @@ export interface UserPreferences {
 }
 
 export const DEFAULT_USER_PREFERENCES: Omit<UserPreferences, 'user_id'> = {
-  push_enabled: true,
+  push_enabled: false,
   email_enabled: true,
-  reminder_enabled: true,
+  reminder_enabled: false,
   biometric_enabled: false,
   marketing_enabled: false,
   preferred_currencies: ['USD'],

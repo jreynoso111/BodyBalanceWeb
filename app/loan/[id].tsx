@@ -31,6 +31,10 @@ export default function LoanDetailScreen() {
     const [historyModalVisible, setHistoryModalVisible] = useState(false);
     const [availableCurrencies, setAvailableCurrencies] = useState<string[]>(['USD']);
     const [currencyPickerVisible, setCurrencyPickerVisible] = useState(false);
+    const [reductionModalVisible, setReductionModalVisible] = useState(false);
+    const [reductionAmount, setReductionAmount] = useState('');
+    const [reductionReason, setReductionReason] = useState('');
+    const [sendingReductionRequest, setSendingReductionRequest] = useState(false);
 
     useEffect(() => {
         if (!loanId || !user?.id) return;
@@ -148,12 +152,71 @@ export default function LoanDetailScreen() {
         }
     };
 
+    const openReductionModal = () => {
+        setReductionAmount('');
+        setReductionReason('');
+        setReductionModalVisible(true);
+    };
+
+    const closeReductionModal = (force = false) => {
+        if (sendingReductionRequest && !force) return;
+        setReductionModalVisible(false);
+        setReductionAmount('');
+        setReductionReason('');
+    };
+
+    const submitReductionRequest = async () => {
+        if (!loan?.id || !user?.id || !loan?.target_user_id) {
+            Alert.alert('Error', 'This request is unavailable right now.');
+            return;
+        }
+
+        const parsedAmount = Number.parseFloat(reductionAmount);
+        const normalizedReason = reductionReason.trim();
+
+        if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+            Alert.alert('Error', 'Enter a valid reduction amount.');
+            return;
+        }
+
+        if (!normalizedReason) {
+            Alert.alert('Error', 'Please add a short reason for the request.');
+            return;
+        }
+
+        setSendingReductionRequest(true);
+
+        try {
+            const formattedAmount = `${loan.currency || 'USD'} ${parsedAmount.toLocaleString()}`;
+            const { error } = await supabase.from('p2p_requests').insert([
+                {
+                    type: 'debt_reduction',
+                    loan_id: loan.id,
+                    from_user_id: user.id,
+                    to_user_id: loan.target_user_id,
+                    message: `Borrower requested a debt reduction of ${formattedAmount}. Reason: ${normalizedReason}`,
+                    status: 'pending',
+                },
+            ]);
+
+            if (error) {
+                Alert.alert('Error', error.message);
+                return;
+            }
+
+            closeReductionModal(true);
+            Alert.alert('Sent', 'Your request has been sent to the lender.');
+        } finally {
+            setSendingReductionRequest(false);
+        }
+    };
+
     const syncLoanStatus = async () => {
         if (!loanId) return;
 
         const { data: loanSnapshot, error: loanSnapshotError } = await supabase
             .from('loans')
-            .select('id, category, amount')
+            .select('id, category, amount, type, currency, item_name')
             .eq('id', loanId)
             .single();
 
@@ -213,9 +276,12 @@ export default function LoanDetailScreen() {
             amount: loan?.category === 'money' ? Number(loan?.amount || 0) : 0,
             dueDate: loan?.due_date || new Date().toISOString().split('T')[0],
             category: loan?.category || 'money',
+            direction: loan?.type || (loanSnapshot as any)?.type || 'lent',
             status: nextStatus,
             frequency: loan?.reminder_frequency || 'none',
             interval: Number(loan?.reminder_interval || 1),
+            currency: loan?.currency || (loanSnapshot as any)?.currency || null,
+            itemName: loan?.item_name || (loanSnapshot as any)?.item_name || null,
         });
     };
 
@@ -277,9 +343,12 @@ export default function LoanDetailScreen() {
                 amount: loan?.category === 'money' ? Number(parseFloat(editAmount) || 0) : 0,
                 dueDate: editDueDate || loan?.due_date || new Date().toISOString().split('T')[0],
                 category: loan?.category || 'money',
+                direction: loan?.type || 'lent',
                 status: loan?.status || 'active',
                 frequency: reminderFrequency,
                 interval: parseInt(reminderInterval) || 1,
+                currency: loan?.category === 'money' ? editCurrency : null,
+                itemName: loan?.category === 'item' ? editItemName.trim() : null,
             });
             Alert.alert('Success', 'Record updated');
             setIsEditing(false);
@@ -837,6 +906,71 @@ export default function LoanDetailScreen() {
                 </RNView>
             </Modal>
 
+            <Modal
+                animationType="slide"
+                transparent
+                visible={reductionModalVisible}
+                onRequestClose={() => closeReductionModal()}
+            >
+                <RNView style={styles.reductionModalOverlay}>
+                    <Card style={styles.reductionModalCard}>
+                        <RNView style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Request Debt Reduction</Text>
+                            <TouchableOpacity onPress={() => closeReductionModal()} disabled={sendingReductionRequest}>
+                                <X size={24} color="#0F172A" />
+                            </TouchableOpacity>
+                        </RNView>
+                        <Text style={styles.reductionModalDescription}>
+                            Ask the lender to reduce part of this balance and explain why.
+                        </Text>
+                        <Text style={styles.label}>Reduction Amount</Text>
+                        <TextInput
+                            value={reductionAmount}
+                            onChangeText={setReductionAmount}
+                            keyboardType="decimal-pad"
+                            placeholder="0.00"
+                            placeholderTextColor="#94A3B8"
+                            style={styles.input}
+                            editable={!sendingReductionRequest}
+                        />
+                        <Text style={styles.label}>Reason</Text>
+                        <TextInput
+                            value={reductionReason}
+                            onChangeText={setReductionReason}
+                            placeholder="Explain why you are requesting the reduction"
+                            placeholderTextColor="#94A3B8"
+                            style={[styles.input, styles.reductionReasonInput]}
+                            multiline
+                            textAlignVertical="top"
+                            editable={!sendingReductionRequest}
+                        />
+                        <RNView style={styles.reductionModalActions}>
+                            <TouchableOpacity
+                                style={styles.reductionCancelButton}
+                                onPress={() => closeReductionModal()}
+                                disabled={sendingReductionRequest}
+                            >
+                                <Text style={styles.reductionCancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.reductionSubmitButton,
+                                    sendingReductionRequest && styles.reductionSubmitButtonDisabled,
+                                ]}
+                                onPress={() => {
+                                    void submitReductionRequest();
+                                }}
+                                disabled={sendingReductionRequest}
+                            >
+                                <Text style={styles.reductionSubmitButtonText}>
+                                    {sendingReductionRequest ? 'Sending...' : 'Send Request'}
+                                </Text>
+                            </TouchableOpacity>
+                        </RNView>
+                    </Card>
+                </RNView>
+            </Modal>
+
             <RNView style={styles.footer}>
                 {loan.category === 'money' && loan.status !== 'paid' && (
                     <TouchableOpacity
@@ -868,36 +1002,10 @@ export default function LoanDetailScreen() {
                     </TouchableOpacity>
                 )}
 
-                {loan.type === 'borrowed' && loan.target_user_id && loan.status !== 'paid' && (
+                {loan.category === 'money' && loan.type === 'borrowed' && loan.target_user_id && loan.status !== 'paid' && (
                     <TouchableOpacity
                         style={styles.secondaryBtn}
-                        onPress={() => {
-                            Alert.prompt(
-                                'Request Debt Reduction',
-                                'Enter the amount you would like to have reduced and a reason.',
-                                [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    {
-                                        text: 'Send Request',
-                                        onPress: async (text: string | undefined) => {
-                                            if (!text) return;
-                                            const { error } = await supabase.from('p2p_requests').insert([
-                                                {
-                                                    type: 'debt_reduction',
-                                                    loan_id: loan.id,
-                                                    from_user_id: user?.id,
-                                                    to_user_id: loan.target_user_id,
-                                                    message: `Borrower requested a debt reduction: ${text}`,
-                                                    status: 'pending',
-                                                },
-                                            ]);
-                                            if (error) Alert.alert('Error', error.message);
-                                            else Alert.alert('Sent', 'Your request has been sent to the lender.');
-                                        }
-                                    }
-                                ]
-                            );
-                        }}
+                        onPress={openReductionModal}
                     >
                         <TrendingDown color="#6366F1" size={22} />
                         <Text style={styles.secondaryBtnText}>Request Reduction</Text>
@@ -1443,6 +1551,61 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: '700',
         fontSize: 14,
+    },
+    reductionModalOverlay: {
+        flex: 1,
+        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(15,23,42,0.45)',
+    },
+    reductionModalCard: {
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+    },
+    reductionModalDescription: {
+        fontSize: 14,
+        lineHeight: 20,
+        color: '#475569',
+        marginBottom: 4,
+    },
+    reductionReasonInput: {
+        minHeight: 120,
+    },
+    reductionModalActions: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 20,
+    },
+    reductionCancelButton: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        backgroundColor: '#FFFFFF',
+    },
+    reductionCancelButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#475569',
+    },
+    reductionSubmitButton: {
+        flex: 1,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        backgroundColor: '#0F172A',
+    },
+    reductionSubmitButtonDisabled: {
+        opacity: 0.7,
+    },
+    reductionSubmitButtonText: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#FFFFFF',
     },
     modalOverlay: {
         flex: 1,

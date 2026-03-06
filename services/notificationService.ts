@@ -1,13 +1,55 @@
-import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform, Alert } from 'react-native';
+import Constants from 'expo-constants';
 import { getOrCreateUserPreferences } from '@/services/userPreferences';
 import { supabase } from '@/services/supabase';
 
 const isWeb = Platform.OS === 'web';
+const isAndroidExpoGo = Platform.OS === 'android' && Constants.appOwnership === 'expo';
+type ReminderCategory = 'money' | 'item';
+type ReminderDirection = 'lent' | 'borrowed';
+
+type ReminderScheduleOptions = {
+    loanId: string;
+    contactName: string;
+    amount: number;
+    dueDate: string;
+    category?: ReminderCategory;
+    direction?: ReminderDirection;
+    frequency?: string;
+    interval?: number;
+    currency?: string | null;
+    itemName?: string | null;
+};
+
+type NotificationsModule = typeof import('expo-notifications');
+let notificationsModule: NotificationsModule | null | undefined;
+
+async function getNotificationsModule() {
+    if (isWeb || isAndroidExpoGo) {
+        return null;
+    }
+
+    if (notificationsModule !== undefined) {
+        return notificationsModule;
+    }
+
+    try {
+        const loadModule = eval('require') as NodeRequire;
+        notificationsModule = loadModule('expo-notifications') as NotificationsModule;
+    } catch (error) {
+        console.warn('expo-notifications unavailable:', error);
+        notificationsModule = null;
+    }
+
+    return notificationsModule;
+}
 
 async function ensureAndroidNotificationChannel() {
     if (Platform.OS === 'android') {
+        const Notifications = await getNotificationsModule();
+        if (!Notifications) return;
+
         await Notifications.setNotificationChannelAsync('default', {
             name: 'default',
             importance: Notifications.AndroidImportance.MAX,
@@ -19,6 +61,59 @@ async function ensureAndroidNotificationChannel() {
 
 function isMissingPushTokenColumn(message?: string) {
     return String(message || '').toLowerCase().includes('push_token');
+}
+
+function getExpoProjectId() {
+    return (
+        Constants.easConfig?.projectId ||
+        Constants.expoConfig?.extra?.eas?.projectId ||
+        process.env.EXPO_PUBLIC_EAS_PROJECT_ID ||
+        null
+    );
+}
+
+function formatReminderAmount(amount: number, currency?: string | null) {
+    const formattedAmount = amount.toLocaleString();
+    return currency ? `${currency} ${formattedAmount}` : `$${formattedAmount}`;
+}
+
+function buildReminderMessage(options: {
+    category: ReminderCategory;
+    direction: ReminderDirection;
+    contactName: string;
+    amount: number;
+    currency?: string | null;
+    itemName?: string | null;
+}) {
+    const label = options.itemName?.trim() || 'the item';
+
+    if (options.category === 'item') {
+        if (options.direction === 'borrowed') {
+            return {
+                title: 'Return Reminder! 📦',
+                body: `Reminder: return ${label} to ${options.contactName}.`,
+            };
+        }
+
+        return {
+            title: 'Return Reminder! 📦',
+            body: `Reminder: ${options.contactName} should return ${label} to you.`,
+        };
+    }
+
+    const formattedAmount = formatReminderAmount(options.amount, options.currency);
+
+    if (options.direction === 'borrowed') {
+        return {
+            title: 'Repayment Reminder! 💸',
+            body: `Reminder: you owe ${options.contactName} ${formattedAmount}.`,
+        };
+    }
+
+    return {
+        title: 'Payment Reminder! 💰',
+        body: `Reminder: ${options.contactName} owes you ${formattedAmount}.`,
+    };
 }
 
 async function savePushToken(userId: string, token: string | null) {
@@ -37,6 +132,9 @@ async function savePushToken(userId: string, token: string | null) {
 
 export async function getPushPermissionStatus() {
     if (isWeb) return 'granted' as const;
+    if (isAndroidExpoGo) return 'unavailable' as const;
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) return 'unavailable' as const;
     const { status } = await Notifications.getPermissionsAsync();
     return status;
 }
@@ -52,6 +150,22 @@ export async function registerForPushNotificationsAsync(options?: {
         return null;
     }
 
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) {
+        if (options?.userId) {
+            await savePushToken(options.userId, null);
+        }
+        if (requestPermission) {
+            Alert.alert(
+                'Push notifications are unavailable',
+                isAndroidExpoGo
+                    ? 'Expo Go on Android does not support this notifications flow. Use a development build for push testing.'
+                    : 'We could not load the notifications module on this device.'
+            );
+        }
+        return null;
+    }
+
     await ensureAndroidNotificationChannel();
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -63,6 +177,9 @@ export async function registerForPushNotificationsAsync(options?: {
     }
 
     if (finalStatus !== 'granted') {
+        if (options?.userId) {
+            await savePushToken(options.userId, null);
+        }
         if (requestPermission) {
             Alert.alert('Push notifications are disabled', 'Enable notifications in system settings to receive alerts.');
         }
@@ -70,7 +187,21 @@ export async function registerForPushNotificationsAsync(options?: {
     }
 
     if (!isWeb) {
-        token = (await Notifications.getExpoPushTokenAsync()).data;
+        try {
+            const projectId = getExpoProjectId();
+            token = (
+                await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+            ).data;
+        } catch (error: any) {
+            console.warn('Failed to get Expo push token:', error?.message || error);
+            if (options?.userId) {
+                await savePushToken(options.userId, null);
+            }
+            if (requestPermission) {
+                Alert.alert('Push notifications are unavailable', 'We could not finish device setup for notifications.');
+            }
+            return null;
+        }
     } else {
         token = 'web-local';
     }
@@ -91,6 +222,8 @@ export async function disablePushNotifications(userId?: string) {
 
 export async function clearAllLoanReminders() {
     if (isWeb) return;
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) return;
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     const targets = scheduled.filter((item) => {
         const data = (item.content?.data || {}) as Record<string, any>;
@@ -102,6 +235,8 @@ export async function clearAllLoanReminders() {
 
 export async function cancelLoanReminders(loanId: string) {
     if (isWeb || !loanId) return;
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) return;
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     const targets = scheduled.filter((item) => {
         const data = (item.content?.data || {}) as Record<string, any>;
@@ -112,24 +247,34 @@ export async function cancelLoanReminders(loanId: string) {
 }
 
 export async function scheduleLoanReminder(
-    loanId: string,
-    contactName: string,
-    amount: number,
-    dueDate: string,
-    category: 'money' | 'item' = 'money',
-    frequency: string = 'none',
-    interval: number = 1
+    {
+        loanId,
+        contactName,
+        amount,
+        dueDate,
+        category = 'money',
+        direction = 'lent',
+        frequency = 'none',
+        interval = 1,
+        currency,
+        itemName,
+    }: ReminderScheduleOptions
 ) {
     if (isWeb) return null;
+    const Notifications = await getNotificationsModule();
+    if (!Notifications) return null;
 
     const triggerDate = new Date(dueDate);
     triggerDate.setHours(9, 0, 0, 0);
 
-    const body = category === 'money'
-        ? `Reminder: ${contactName} owes you $${amount.toLocaleString()}.`
-        : `Reminder: ${contactName} should return an item to you.`;
-
-    const title = category === 'money' ? 'Payment Reminder! 💰' : 'Item Return Reminder! 📦';
+    const { title, body } = buildReminderMessage({
+        category,
+        direction,
+        contactName,
+        amount,
+        currency,
+        itemName,
+    });
 
     let trigger: any;
 
@@ -175,7 +320,7 @@ export async function scheduleLoanReminder(
         content: {
             title: title,
             body: body,
-            data: { loanId, kind: 'loan_reminder' },
+            data: { loanId, kind: 'loan_reminder', direction, category },
         },
         trigger,
     });
@@ -185,13 +330,7 @@ export async function scheduleLoanReminder(
 
 export async function scheduleLoanReminderForUser(
     userId: string,
-    loanId: string,
-    contactName: string,
-    amount: number,
-    dueDate: string,
-    category: 'money' | 'item',
-    frequency: string,
-    interval: number
+    options: ReminderScheduleOptions
 ) {
     if (!userId) return null;
     const { data: prefs, error } = await getOrCreateUserPreferences(userId);
@@ -202,15 +341,7 @@ export async function scheduleLoanReminderForUser(
     const permission = await getPushPermissionStatus();
     if (permission !== 'granted') return null;
 
-    return scheduleLoanReminder(
-        loanId,
-        contactName,
-        amount,
-        dueDate,
-        category,
-        frequency,
-        interval
-    );
+    return scheduleLoanReminder(options);
 }
 
 export async function upsertLoanReminderForUser(options: {
@@ -219,24 +350,29 @@ export async function upsertLoanReminderForUser(options: {
     contactName: string;
     amount: number;
     dueDate: string;
-    category: 'money' | 'item';
+    category: ReminderCategory;
+    direction?: ReminderDirection;
     status?: string | null;
     frequency?: string | null;
     interval?: number | null;
+    currency?: string | null;
+    itemName?: string | null;
 }) {
     await cancelLoanReminders(options.loanId);
 
     const frequency = options.frequency || 'none';
     if (options.status === 'paid' || frequency === 'none') return null;
 
-    return scheduleLoanReminderForUser(
-        options.userId,
-        options.loanId,
-        options.contactName,
-        options.amount,
-        options.dueDate,
-        options.category,
+    return scheduleLoanReminderForUser(options.userId, {
+        loanId: options.loanId,
+        contactName: options.contactName,
+        amount: options.amount,
+        dueDate: options.dueDate,
+        category: options.category,
+        direction: options.direction,
         frequency,
-        options.interval || 1
-    );
+        interval: options.interval || 1,
+        currency: options.currency,
+        itemName: options.itemName,
+    });
 }

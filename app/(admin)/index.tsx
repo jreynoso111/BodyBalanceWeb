@@ -59,6 +59,9 @@ export default function AdminDashboardIndex() {
     return (
         <Screen style={styles.container}>
             <ScrollView contentContainerStyle={styles.scroll}>
+                <TouchableOpacity style={styles.backToAppButton} onPress={() => router.replace('/(tabs)' as any)}>
+                    <Text style={styles.backToAppText}>Back to app</Text>
+                </TouchableOpacity>
                 <Text style={styles.title}>Platform Overview</Text>
 
                 <View style={styles.statsGrid}>
@@ -138,6 +141,19 @@ const styles = StyleSheet.create({
     },
     scroll: {
         padding: 24,
+    },
+    backToAppButton: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 999,
+        backgroundColor: '#EEF2FF',
+        marginBottom: 12,
+    },
+    backToAppText: {
+        color: '#4338CA',
+        fontWeight: '800',
+        fontSize: 13,
     },
     title: {
         fontSize: 20,

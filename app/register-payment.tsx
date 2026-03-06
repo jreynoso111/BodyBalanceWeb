@@ -145,7 +145,7 @@ export default function RegisterPaymentScreen() {
 
         const { data: loanSnapshot, error: loanSnapshotError } = await supabase
             .from('loans')
-            .select('id, category, amount, due_date, reminder_frequency, reminder_interval, status, contacts(name)')
+            .select('id, category, amount, due_date, reminder_frequency, reminder_interval, status, type, currency, item_name, contacts(name)')
             .eq('id', normalizedLoanId)
             .single();
 
@@ -207,9 +207,12 @@ export default function RegisterPaymentScreen() {
             amount: loanSnapshot.category === 'money' ? Number(loanSnapshot.amount || 0) : 0,
             dueDate: (loanSnapshot as any).due_date || new Date().toISOString().split('T')[0],
             category: (loanSnapshot as any).category || 'money',
+            direction: (loanSnapshot as any).type || 'lent',
             status: nextStatus,
             frequency: (loanSnapshot as any).reminder_frequency || 'none',
             interval: Number((loanSnapshot as any).reminder_interval || 1),
+            currency: (loanSnapshot as any).currency || null,
+            itemName: (loanSnapshot as any).item_name || null,
         });
     };
 

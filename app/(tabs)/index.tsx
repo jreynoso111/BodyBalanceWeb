@@ -1,35 +1,42 @@
 import React, { useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, View as RNView, RefreshControl, Alert, Dimensions } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, View as RNView, RefreshControl } from 'react-native';
 import { Text, View, Screen, Card } from '@/components/Themed';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
-import { ArrowUpRight, ArrowDownLeft, Plus, Wallet, Box, Bell } from 'lucide-react-native';
+import { ArrowUpRight, ArrowDownLeft, Plus, Wallet, Box, Bell, Clock3, AlertTriangle, CheckCircle2 } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { getCurrencySymbol } from '@/constants/Currencies';
 import { useGreetingStore } from '@/store/greetingStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Calendar } from 'react-native-calendars';
-import { LineChart } from 'react-native-chart-kit';
+
+type LoanRecord = {
+  id: string;
+  amount: number | null;
+  type: 'lent' | 'borrowed';
+  status: string;
+  category: 'money' | 'item';
+  created_at: string;
+  due_date: string | null;
+  item_name: string | null;
+  currency: string | null;
+  contacts?: { name?: string | null } | null;
+  remaining_amount?: number;
+};
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
   const greeting = useGreetingStore((state) => state.greetings[state.currentIndex]);
   const [accountName, setAccountName] = useState('');
-  const [summary, setSummary] = useState({ lent: 0, borrowed: 0 });
-  const [recentLoans, setRecentLoans] = useState<any[]>([]);
-  const [filter, setFilter] = useState<'all' | 'lent' | 'borrowed'>('all');
+  const [summary, setSummary] = useState({ lent: 0, borrowed: 0, overdue: 0, dueSoon: 0 });
+  const [recentLoans, setRecentLoans] = useState<LoanRecord[]>([]);
+  const [dueItems, setDueItems] = useState<LoanRecord[]>([]);
   const [requestCount, setRequestCount] = useState(0);
-  const [viewMode, setViewMode] = useState<'summary' | 'calendar'>('summary');
-  const [calendarMarks, setCalendarMarks] = useState<any>({});
-
-  const [graphData, setGraphData] = useState<any>({ labels: [], datasets: [{ data: [] }] });
+  const [refreshing, setRefreshing] = useState(false);
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
-
-  const [refreshing, setRefreshing] = useState(false);
   const colorScheme = useColorScheme() || 'light';
   const bottomInset = Math.max(insets.bottom, 12);
   const fabBottomOffset = bottomInset + 16;
@@ -37,201 +44,105 @@ export default function DashboardScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      fetchData();
-    }, [user, filter])
+      void fetchData();
+    }, [user?.id])
   );
 
   const fetchData = async () => {
     if (!user) return;
     setRefreshing(true);
 
-    const profileNameFromMetadata =
-      typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name.trim() : '';
+    try {
+      const profileNameFromMetadata =
+        typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name.trim() : '';
 
-    if (profileNameFromMetadata) {
-      setAccountName(profileNameFromMetadata);
-    }
-
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    const profileName =
-      typeof profileData?.full_name === 'string' ? profileData.full_name.trim() : '';
-
-    if (profileName) {
-      setAccountName(profileName);
-    } else if (!profileNameFromMetadata) {
-      setAccountName('there');
-    }
-
-    // Fetch summary
-    const { data: allLoans } = await supabase
-      .from('loans')
-      .select('id, amount, type, status, category, created_at, due_date')
-      .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .neq('status', 'paid')
-      .eq('category', 'money');
-
-    const { data: allPayments } = await supabase
-      .from('payments')
-      .select('amount, loan_id, created_at, loans!inner(type)')
-      .eq('user_id', user.id)
-      .eq('loans.category', 'money');
-
-    let lent = allLoans?.filter(l => l.type === 'lent').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-    let borrowed = allLoans?.filter(l => l.type === 'borrowed').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-
-    // Subtract payments from totals
-    allPayments?.forEach(p => {
-      const type = (p.loans as any).type;
-      if (type === 'lent') {
-        lent -= Number(p.amount);
-      } else if (type === 'borrowed') {
-        borrowed -= Number(p.amount);
+      if (profileNameFromMetadata) {
+        setAccountName(profileNameFromMetadata);
       }
-    });
 
-    setSummary({ lent, borrowed });
+      const [profileResult, loansResult, paymentsResult, requestsResult] = await Promise.all([
+        supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
+        supabase
+          .from('loans')
+          .select('id, amount, type, status, category, created_at, due_date, item_name, currency, contacts(name)')
+          .eq('user_id', user.id)
+          .is('deleted_at', null)
+          .neq('status', 'paid')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('payments')
+          .select('amount, loan_id, created_at')
+          .eq('user_id', user.id),
+        supabase
+          .from('p2p_requests')
+          .select('*', { count: 'exact', head: true })
+          .eq('to_user_id', user.id)
+          .eq('status', 'pending'),
+      ]);
 
-    // Generate Graph Data
-    const generateGraphData = () => {
-      const today = new Date();
-      const labels = [];
-      const data = [];
+      const profileName = typeof profileResult.data?.full_name === 'string' ? profileResult.data.full_name.trim() : '';
+      if (profileName) {
+        setAccountName(profileName);
+      } else if (!profileNameFromMetadata) {
+        setAccountName('there');
+      }
 
-      const transactions: any[] = [];
-      allLoans?.forEach(l => {
-        if (l.created_at) {
-          transactions.push({ date: l.created_at.split('T')[0], amount: Number(l.amount), type: l.type === 'lent' ? 'added' : 'subtracted' });
-        }
-        if (l.due_date) {
-          transactions.push({ date: l.due_date.split('T')[0], amount: Number(l.amount), type: l.type === 'lent' ? 'subtracted' : 'added' });
-        }
-      });
-      allPayments?.forEach(p => {
-        if (p.created_at) {
-          const type = (p.loans as any).type;
-          transactions.push({ date: p.created_at.split('T')[0], amount: Number(p.amount), type: type === 'lent' ? 'subtracted' : 'added' });
-        }
+      const allLoans = (loansResult.data || []) as LoanRecord[];
+      const allPayments = paymentsResult.data || [];
+      const paymentTotals = new Map<string, number>();
+
+      allPayments.forEach((payment: any) => {
+        const current = paymentTotals.get(payment.loan_id) || 0;
+        paymentTotals.set(payment.loan_id, current + Number(payment.amount || 0));
       });
 
-      let runningBalance = lent - borrowed;
-
-      for (let i = 15; i >= -15; i--) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-
-        let netChange = 0;
-        transactions.filter(t => t.date === dateStr).forEach(t => {
-          if (t.type === 'added') netChange += t.amount;
-          if (t.type === 'subtracted') netChange -= t.amount;
-        });
-
-        // The running balance we calculated earlier is accurate for "today".
-        // Let's pretend today is 0 and adjust runningBalance to be retroactive.
-        // Actually, let's keep it simple: we want projection.
-        // To be exact we should start 15 days ago and project.
-        // Since it's a mock line graphic, we'll randomize and use netBalance as the end goal
-        runningBalance = runningBalance + netChange + (Math.random() * 50 - 25);
-        if (i % 5 === 0) {
-          labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-        } else {
-          labels.push('');
-        }
-        data.push(Math.round(runningBalance));
-      }
-      return { labels, datasets: [{ data: data.length > 0 ? data : [0, 0, 0, 0, 0] }] };
-    };
-    setGraphData(generateGraphData());
-
-    // Fetch filtered activity
-    let query = supabase
-      .from('loans')
-      .select('*, contacts(name)')
-      .eq('user_id', user.id)
-      .is('deleted_at', null);
-
-    if (filter !== 'all') {
-      query = query.eq('type', filter);
-    }
-
-    const { data: recent } = await query
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (recent && recent.length > 0) {
-      const loanIds = recent.map(l => l.id);
-      const { data: recentPayments } = await supabase
-        .from('payments')
-        .select('amount, loan_id, created_at')
-        .in('loan_id', loanIds);
-
-      const enrichedRecent = recent.map((loan: any) => {
-        const loanPayments = recentPayments?.filter(p => p.loan_id === loan.id) || [];
-        const totalPaid = loanPayments.reduce((acc, p) => acc + Number(p.amount), 0);
+      const enrichedLoans = allLoans.map((loan) => {
+        const paid = paymentTotals.get(loan.id) || 0;
+        const remaining = loan.category === 'money' ? Math.max(Number(loan.amount || 0) - paid, 0) : 0;
         return {
           ...loan,
-          remaining_amount: Number(loan.amount) - totalPaid
+          remaining_amount: remaining,
         };
       });
 
-      setRecentLoans(enrichedRecent);
+      const moneyLoans = enrichedLoans.filter((loan) => loan.category === 'money');
+      const lent = moneyLoans
+        .filter((loan) => loan.type === 'lent')
+        .reduce((acc, loan) => acc + Number(loan.remaining_amount || 0), 0);
+      const borrowed = moneyLoans
+        .filter((loan) => loan.type === 'borrowed')
+        .reduce((acc, loan) => acc + Number(loan.remaining_amount || 0), 0);
 
-      // Compute Calendar Marks
-      const marks: any = {};
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const soon = new Date(now);
+      soon.setDate(now.getDate() + 7);
 
-      enrichedRecent.forEach((loan: any) => {
-        if (loan.created_at) {
-          const createdAt = loan.created_at.split('T')[0];
-          if (!marks[createdAt]) marks[createdAt] = { lent: 0, borrowed: 0, paid: 0, to_collect: 0, to_pay: 0 };
-          if (loan.type === 'lent') {
-            marks[createdAt].lent += Number(loan.amount);
-          } else {
-            marks[createdAt].borrowed += Number(loan.amount);
-          }
-        }
+      const actionableDueItems = enrichedLoans
+        .filter((loan) => loan.status === 'active' && loan.due_date)
+        .map((loan) => ({
+          ...loan,
+          due_date: loan.due_date,
+        }))
+        .sort((a, b) => new Date(a.due_date || '').getTime() - new Date(b.due_date || '').getTime());
 
-        if (loan.due_date) {
-          const dueDate = loan.due_date.split('T')[0];
-          if (!marks[dueDate]) marks[dueDate] = { lent: 0, borrowed: 0, paid: 0, to_collect: 0, to_pay: 0 };
-          if (loan.type === 'lent') {
-            marks[dueDate].to_collect += Number(loan.remaining_amount ?? loan.amount);
-          } else {
-            marks[dueDate].to_pay += Number(loan.remaining_amount ?? loan.amount);
-          }
-        }
-      });
+      const overdueCount = actionableDueItems.filter((loan) => {
+        const due = new Date(`${loan.due_date}T12:00:00`);
+        return due.getTime() < now.getTime();
+      }).length;
 
-      // Merge Payments
-      if (recentPayments) {
-        recentPayments.forEach((p: any) => {
-          if (!p.created_at) return;
-          const d = p.created_at.split('T')[0];
-          if (!marks[d]) marks[d] = { lent: 0, borrowed: 0, paid: 0, to_collect: 0, to_pay: 0 };
-          marks[d].paid += Number(p.amount);
-        });
-      }
+      const dueSoonCount = actionableDueItems.filter((loan) => {
+        const due = new Date(`${loan.due_date}T12:00:00`);
+        return due.getTime() >= now.getTime() && due.getTime() <= soon.getTime();
+      }).length;
 
-      setCalendarMarks(marks);
-    } else {
-      setRecentLoans([]);
-      setCalendarMarks({});
+      setSummary({ lent, borrowed, overdue: overdueCount, dueSoon: dueSoonCount });
+      setDueItems(actionableDueItems.slice(0, 5));
+      setRecentLoans(enrichedLoans.slice(0, 8));
+      setRequestCount(requestsResult.count || 0);
+    } finally {
+      setRefreshing(false);
     }
-
-    // Fetch pending requests count
-    const { count } = await supabase
-      .from('p2p_requests')
-      .select('*', { count: 'exact', head: true })
-      .eq('to_user_id', user.id)
-      .eq('status', 'pending');
-
-    setRequestCount(count || 0);
-    setRefreshing(false);
   };
 
   const balance = summary.lent - summary.borrowed;
@@ -244,11 +155,11 @@ export default function DashboardScreen() {
       >
         <View style={styles.header}>
           <RNView style={styles.greetingRow}>
-            <Text style={styles.greeting}>{greeting}, {accountName}!</Text>
-            <TouchableOpacity
-              style={styles.requestIcon}
-              onPress={() => router.push('/requests')}
-            >
+            <View>
+              <Text style={styles.greeting}>{greeting}, {accountName}!</Text>
+              <Text style={styles.subtitle}>Focus on what needs attention first.</Text>
+            </View>
+            <TouchableOpacity style={styles.requestIcon} onPress={() => router.push('/requests')}>
               <Bell size={24} color="#0F172A" />
               {requestCount > 0 && (
                 <RNView style={styles.badge}>
@@ -259,211 +170,175 @@ export default function DashboardScreen() {
           </RNView>
         </View>
 
-        <View style={styles.sectionHeader}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-            <Text style={styles.sectionTitle}>Overview</Text>
-            <View style={styles.filterTabs}>
-              <TouchableOpacity
-                onPress={() => setViewMode('summary')}
-                style={[styles.filterTab, viewMode === 'summary' && styles.filterTabActive]}
-              >
-                <Text style={[styles.filterTabText, viewMode === 'summary' && styles.filterTabTextActive]}>
-                  Summary
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setViewMode('calendar')}
-                style={[styles.filterTab, viewMode === 'calendar' && styles.filterTabActive]}
-              >
-                <Text style={[styles.filterTabText, viewMode === 'calendar' && styles.filterTabTextActive]}>
-                  Agenda
-                </Text>
-              </TouchableOpacity>
+        <Card style={styles.balanceCard}>
+          <RNView style={styles.balanceCardHeader}>
+            <View>
+              <Text style={styles.balanceLabel}>Net position</Text>
+              <Text style={styles.balanceValue}>{formatSignedCurrency(balance)}</Text>
             </View>
-          </View>
-        </View>
+            <RNView style={[styles.netBadge, balance >= 0 ? styles.netBadgePositive : styles.netBadgeNegative]}>
+              <Text style={[styles.netBadgeText, balance >= 0 ? styles.netBadgeTextPositive : styles.netBadgeTextNegative]}>
+                {balance >= 0 ? 'Ahead' : 'Behind'}
+              </Text>
+            </RNView>
+          </RNView>
+          <Text style={styles.balanceHint}>
+            {balance >= 0 ? 'You are owed more than you owe.' : 'You owe more than you are owed.'}
+          </Text>
 
-        {viewMode === 'summary' ? (
-          <View style={styles.summaryContainer}>
-            <Card style={styles.mainCard}>
-              <Text style={styles.mainCardLabel}>Net Balance</Text>
-              <RNView style={styles.balanceRow}>
-                <Text style={styles.mainBalance}>
-                  {balance >= 0 ? `$${balance.toLocaleString()}` : `-$${Math.abs(balance).toLocaleString()}`}
-                </Text>
+          <RNView style={styles.balanceBreakdownRow}>
+            <RNView style={styles.balanceBreakdownCard}>
+              <RNView style={[styles.statIcon, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                <ArrowUpRight size={18} color="#10B981" />
               </RNView>
-            </Card>
+              <Text style={styles.breakdownLabel}>To collect</Text>
+              <Text style={[styles.breakdownValue, { color: '#047857' }]}>{formatCurrency(summary.lent)}</Text>
+            </RNView>
+            <RNView style={styles.balanceBreakdownCard}>
+              <RNView style={[styles.statIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+                <ArrowDownLeft size={18} color="#EF4444" />
+              </RNView>
+              <Text style={styles.breakdownLabel}>To pay</Text>
+              <Text style={[styles.breakdownValue, { color: '#B91C1C' }]}>{formatCurrency(summary.borrowed)}</Text>
+            </RNView>
+          </RNView>
 
-            <RNView style={styles.statsRow}>
-              <Card style={styles.statCard}>
-                <RNView style={[styles.statIcon, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                  <ArrowUpRight size={20} color="#10B981" />
-                </RNView>
-                <Text style={styles.statLabel}>To Collect</Text>
-                <Text style={styles.statValue}>${summary.lent.toLocaleString()}</Text>
-              </Card>
-
-              <Card style={styles.statCard}>
-                <RNView style={[styles.statIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                  <ArrowDownLeft size={20} color="#EF4444" />
-                </RNView>
-                <Text style={styles.statLabel}>To Pay</Text>
-                <Text style={styles.statValue}>${summary.borrowed.toLocaleString()}</Text>
-              </Card>
+          <View style={styles.distributionSection}>
+            <RNView style={styles.distributionLabels}>
+              <Text style={styles.distributionTitle}>Balance mix</Text>
+              <Text style={styles.distributionPercent}>
+                {getCollectShare(summary.lent, summary.borrowed)}% collect
+              </Text>
+            </RNView>
+            <RNView style={styles.distributionBar}>
+              <RNView
+                style={[
+                  styles.distributionCollect,
+                  { flex: Math.max(summary.lent, 0.0001) },
+                ]}
+              />
+              <RNView
+                style={[
+                  styles.distributionPay,
+                  { flex: Math.max(summary.borrowed, 0.0001) },
+                ]}
+              />
+            </RNView>
+            <RNView style={styles.distributionLegend}>
+              <RNView style={styles.legendItem}>
+                <RNView style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                <Text style={styles.legendText}>{getCollectShare(summary.lent, summary.borrowed)}% to collect</Text>
+              </RNView>
+              <RNView style={styles.legendItem}>
+                <RNView style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+                <Text style={styles.legendText}>{100 - getCollectShare(summary.lent, summary.borrowed)}% to pay</Text>
+              </RNView>
             </RNView>
           </View>
-        ) : (
-          <View style={{ marginBottom: 32 }}>
-            <Calendar
-              current={new Date().toISOString().split('T')[0]}
-              dayComponent={({ date, state }: any) => {
-                const mark = calendarMarks[date.dateString];
-                return (
-                  <TouchableOpacity
-                    style={{
-                      height: 50,
-                      alignItems: 'center',
-                      justifyContent: 'flex-start',
-                      width: 45
-                    }}
-                    onPress={() => {
-                      const dayStr = date.dateString;
-                      Alert.alert('Selected Date', dayStr);
-                    }}
-                  >
-                    <Text
-                      style={{
-                        textAlign: 'center',
-                        color: state === 'disabled' ? '#cbd5e1' : state === 'today' ? '#6366F1' : '#0F172A',
-                        fontWeight: state === 'today' ? 'bold' : 'normal',
-                        fontSize: 14,
-                        marginBottom: 2
-                      }}
-                    >
-                      {date.day}
-                    </Text>
-                    {mark?.lent > 0 && <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#EF4444' }}>${mark.lent}</Text>}
-                    {mark?.borrowed > 0 && <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#6366F1' }}>${mark.borrowed}</Text>}
-                    {mark?.paid > 0 && <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#10B981' }}>${mark.paid}</Text>}
-                    {mark?.to_collect > 0 && <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#F59E0B' }}>Exp: ${mark.to_collect}</Text>}
-                    {mark?.to_pay > 0 && <Text style={{ fontSize: 9, fontWeight: 'bold', color: '#0F172A' }}>Due: ${mark.to_pay}</Text>}
-                  </TouchableOpacity>
-                );
-              }}
-              theme={{
-                backgroundColor: 'transparent',
-                calendarBackground: 'transparent',
-                textSectionTitleColor: '#64748B',
-                todayTextColor: '#6366F1',
-                dayTextColor: '#0F172A',
-                textDisabledColor: '#CBD5E1',
-                arrowColor: '#0F172A',
-                monthTextColor: '#0F172A',
-                textMonthFontWeight: 'bold',
-                textDayHeaderFontWeight: '500',
-                textMonthFontSize: 16,
-                textDayHeaderFontSize: 12
-              }}
-              style={{
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: '#F1F5F9',
-                backgroundColor: '#FFFFFF',
-                padding: 4,
-                shadowColor: '#000',
-                shadowOpacity: 0.05,
-                shadowRadius: 10,
-                elevation: 4
-              }}
-            />
-
-          </View>
-        )}
-
-        {graphData.labels.length > 0 && (
-          <RNView style={{ alignItems: 'center', marginBottom: 24, marginTop: 8 }}>
-            <LineChart
-              data={graphData}
-              width={Dimensions.get('window').width - 40}
-              height={60}
-              withDots={false}
-              withInnerLines={false}
-              withOuterLines={false}
-              withHorizontalLabels={false}
-              withVerticalLabels={false}
-              chartConfig={{
-                backgroundColor: 'transparent',
-                backgroundGradientFrom: '#fff',
-                backgroundGradientFromOpacity: 0,
-                backgroundGradientTo: '#fff',
-                backgroundGradientToOpacity: 0,
-                color: (opacity = 1) => `rgba(99, 102, 241, ${opacity})`,
-                strokeWidth: 3,
-              }}
-              bezier
-              style={{
-                paddingRight: 0,
-              }}
-            />
-          </RNView>
-        )}
+        </Card>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Activity</Text>
-            <View style={styles.filterTabs}>
-              {['all', 'lent', 'borrowed'].map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  onPress={() => setFilter(f as any)}
-                  style={[styles.filterTab, filter === f && styles.filterTabActive]}
-                >
-                  <Text style={[styles.filterTabText, filter === f && styles.filterTabTextActive]}>
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <Text style={styles.sectionTitle}>Due next</Text>
+            <TouchableOpacity onPress={() => router.push('/requests')}>
+              <Text style={styles.sectionLink}>Requests</Text>
+            </TouchableOpacity>
+          </View>
+
+          <RNView style={styles.insightRow}>
+            <Card style={styles.insightCard}>
+              <RNView style={[styles.insightIcon, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                <AlertTriangle size={18} color="#F59E0B" />
+              </RNView>
+              <Text style={styles.insightValue}>{summary.overdue}</Text>
+              <Text style={styles.insightLabel}>Overdue</Text>
+            </Card>
+            <Card style={styles.insightCard}>
+              <RNView style={[styles.insightIcon, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                <Clock3 size={18} color="#3B82F6" />
+              </RNView>
+              <Text style={styles.insightValue}>{summary.dueSoon}</Text>
+              <Text style={styles.insightLabel}>Due in 7 days</Text>
+            </Card>
+            <Card style={styles.insightCard}>
+              <RNView style={[styles.insightIcon, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                <CheckCircle2 size={18} color="#10B981" />
+              </RNView>
+              <Text style={styles.insightValue}>{recentLoans.length}</Text>
+              <Text style={styles.insightLabel}>Open records</Text>
+            </Card>
+          </RNView>
+
+          {dueItems.length === 0 ? (
+            <Card style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Nothing due soon.</Text>
+              <Text style={styles.emptyText}>Your active records are clear for now. Add a new one when something happens.</Text>
+              <TouchableOpacity style={styles.emptyButton} onPress={() => router.push('/new-loan')}>
+                <Text style={styles.emptyButtonText}>Record transaction</Text>
+              </TouchableOpacity>
+            </Card>
+          ) : (
+            dueItems.map((item) => (
+              <TouchableOpacity key={item.id} style={styles.listItemWrapper} onPress={() => router.push(`/loan/${item.id}`)}>
+                <Card style={styles.listCard}>
+                  <RNView style={styles.listLeft}>
+                    <RNView style={[styles.iconBox, { backgroundColor: item.category === 'item' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(148, 163, 184, 0.08)' }]}>
+                      {item.category === 'item' ? (
+                        <Box size={20} color="#6366F1" />
+                      ) : (
+                        <Wallet size={20} color={item.type === 'lent' ? '#10B981' : '#EF4444'} />
+                      )}
+                    </RNView>
+                    <View style={styles.listInfo}>
+                      <Text style={styles.listName}>{item.contacts?.name || 'Unknown contact'}</Text>
+                      <Text style={styles.listMeta}>{getDueDescriptor(item.due_date)}</Text>
+                      <Text style={styles.listSub}>{getRecordDescriptor(item)}</Text>
+                    </View>
+                  </RNView>
+                  <RNView style={styles.listRight}>
+                    <Text style={[styles.amountText, { color: item.type === 'lent' ? '#10B981' : '#EF4444' }]}>{getRecordValue(item)}</Text>
+                  </RNView>
+                </Card>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent activity</Text>
+            <TouchableOpacity onPress={() => router.push('/contacts')}>
+              <Text style={styles.sectionLink}>Contacts</Text>
+            </TouchableOpacity>
           </View>
 
           {recentLoans.length === 0 ? (
             <Card style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No activity recorded yet.</Text>
+              <Text style={styles.emptyTitle}>No activity recorded yet.</Text>
+              <Text style={styles.emptyText}>Start with one record so the overview can show who owes what and when.</Text>
               <TouchableOpacity style={styles.emptyButton} onPress={() => router.push('/new-loan')}>
-                <Text style={styles.emptyButtonText}>New Transaction</Text>
+                <Text style={styles.emptyButtonText}>New transaction</Text>
               </TouchableOpacity>
             </Card>
           ) : (
-            recentLoans.map((item: any) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.loanItemWrapper}
-                onPress={() => router.push(`/loan/${item.id}`)}
-              >
-                <Card style={styles.loanCard}>
-                  <RNView style={styles.loanItemLeft}>
-                    <RNView style={[styles.iconBox, { backgroundColor: item.category === 'item' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(148, 163, 184, 0.05)' }]}>
+            recentLoans.map((item) => (
+              <TouchableOpacity key={item.id} style={styles.listItemWrapper} onPress={() => router.push(`/loan/${item.id}`)}>
+                <Card style={styles.listCard}>
+                  <RNView style={styles.listLeft}>
+                    <RNView style={[styles.iconBox, { backgroundColor: item.category === 'item' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(148, 163, 184, 0.08)' }]}>
                       {item.category === 'item' ? (
-                        <Box size={22} color="#6366F1" />
+                        <Box size={20} color="#6366F1" />
                       ) : (
-                        <Wallet size={22} color={item.type === 'lent' ? '#10B981' : '#EF4444'} />
+                        <Wallet size={20} color={item.type === 'lent' ? '#10B981' : '#EF4444'} />
                       )}
                     </RNView>
-                    <RNView style={styles.loanInfo}>
-                      <Text style={styles.contactName}>{item.contacts?.name}</Text>
-                      <Text style={styles.loanSub}>
-                        {item.category === 'item' ? item.item_name : (item.type === 'lent' ? 'Money Lent' : 'Money Borrowed')}
-                      </Text>
-                    </RNView>
+                    <View style={styles.listInfo}>
+                      <Text style={styles.listName}>{item.contacts?.name || 'Unknown contact'}</Text>
+                      <Text style={styles.listSub}>{getRecordDescriptor(item)}</Text>
+                    </View>
                   </RNView>
-                  <RNView style={styles.loanItemRight}>
-                    {item.category === 'money' ? (
-                      <Text style={[styles.amountText, { color: item.type === 'lent' ? '#10B981' : '#EF4444' }]}>
-                        {item.type === 'lent' ? '+' : '-'}{getCurrencySymbol(item.currency)}{Number(item.remaining_amount ?? item.amount).toLocaleString()}
-                      </Text>
-                    ) : (
-                      <Text style={styles.itemBadge}>ITEM</Text>
-                    )}
+                  <RNView style={styles.listRight}>
+                    <Text style={[styles.amountText, { color: item.category === 'money' ? (item.type === 'lent' ? '#10B981' : '#EF4444') : '#6366F1' }]}>{getRecordValue(item)}</Text>
                     <Text style={styles.statusBadge}>{item.status}</Text>
                   </RNView>
                 </Card>
@@ -473,14 +348,62 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      <TouchableOpacity
-        style={[styles.fab, { bottom: fabBottomOffset }]}
-        onPress={() => router.push('/new-loan')}
-      >
-        <Plus color="#fff" size={32} />
+      <TouchableOpacity style={[styles.fab, { bottom: fabBottomOffset }]} onPress={() => router.push('/new-loan')}>
+        <Plus color="#fff" size={30} />
       </TouchableOpacity>
-    </Screen >
+    </Screen>
   );
+}
+
+function formatCurrency(value: number) {
+  return `$${Math.round(value).toLocaleString()}`;
+}
+
+function formatSignedCurrency(value: number) {
+  if (value === 0) return '$0';
+  return value > 0 ? `+$${Math.round(value).toLocaleString()}` : `-$${Math.round(Math.abs(value)).toLocaleString()}`;
+}
+
+function getCollectShare(lent: number, borrowed: number) {
+  const total = lent + borrowed;
+  if (total <= 0) return 50;
+  return Math.round((lent / total) * 100);
+}
+
+function getDueDescriptor(dueDate: string | null) {
+  if (!dueDate) return 'No due date';
+  const due = new Date(`${dueDate}T12:00:00`);
+  if (Number.isNaN(due.getTime())) return dueDate;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Due today';
+  if (diffDays === 1) return 'Due tomorrow';
+  if (diffDays > 1) return `Due in ${diffDays} days`;
+  if (diffDays === -1) return '1 day overdue';
+  return `${Math.abs(diffDays)} days overdue`;
+}
+
+function getRecordDescriptor(item: LoanRecord) {
+  if (item.category === 'item') {
+    return item.type === 'lent'
+      ? `Needs to return ${item.item_name || 'item'}`
+      : `You need to return ${item.item_name || 'item'}`;
+  }
+
+  return item.type === 'lent' ? 'Money you should collect' : 'Money you should pay back';
+}
+
+function getRecordValue(item: LoanRecord) {
+  if (item.category === 'item') {
+    return 'ITEM';
+  }
+
+  const symbol = getCurrencySymbol(item.currency || 'USD');
+  const amount = Math.round(Number(item.remaining_amount || item.amount || 0)).toLocaleString();
+  return `${item.type === 'lent' ? '+' : '-'}${symbol}${amount}`;
 }
 
 const styles = StyleSheet.create({
@@ -489,23 +412,36 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 40,
+    paddingTop: 36,
+  },
+  header: {
+    marginBottom: 24,
+    backgroundColor: 'transparent',
   },
   greetingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: 'transparent',
+  },
+  greeting: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0F172A',
     marginBottom: 4,
   },
+  subtitle: {
+    fontSize: 15,
+    color: '#64748B',
+  },
   requestIcon: {
-    padding: 8,
+    padding: 10,
     position: 'relative',
   },
   badge: {
     position: 'absolute',
-    top: 0,
-    right: 0,
+    top: 2,
+    right: 2,
     backgroundColor: '#EF4444',
     minWidth: 18,
     height: 18,
@@ -521,209 +457,304 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
-  header: {
-    marginBottom: 32,
-    backgroundColor: 'transparent',
-  },
-  greeting: {
-    fontSize: 28,
-    fontWeight: '800',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  summaryContainer: {
-    marginBottom: 32,
-    backgroundColor: 'transparent',
-  },
-  mainCard: {
-    padding: 24,
-    marginBottom: 16,
+  balanceCard: {
+    padding: 22,
+    marginBottom: 24,
     backgroundColor: '#FFFFFF',
-    borderColor: '#F1F5F9',
     borderWidth: 1,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
+    borderColor: '#E2E8F0',
   },
-  mainCardLabel: {
-    color: '#64748B',
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  balanceRow: {
+  balanceCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     backgroundColor: 'transparent',
   },
-  mainBalance: {
+  balanceLabel: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  balanceValue: {
     color: '#0F172A',
-    fontSize: 42,
+    fontSize: 38,
     fontWeight: '900',
     marginTop: 8,
   },
-  statsRow: {
+  balanceHint: {
+    color: '#64748B',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  netBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  netBadgePositive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  netBadgeNegative: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
+  netBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  netBadgeTextPositive: {
+    color: '#047857',
+  },
+  netBadgeTextNegative: {
+    color: '#B91C1C',
+  },
+  balanceBreakdownRow: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 12,
     backgroundColor: 'transparent',
   },
-  statCard: {
+  balanceBreakdownCard: {
     flex: 1,
-    padding: 16,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   statIcon: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  statLabel: {
+  breakdownLabel: {
     fontSize: 12,
     color: '#64748B',
-    fontWeight: '600',
-  },
-  statValue: {
-    fontSize: 18,
     fontWeight: '700',
-    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 12,
   },
-  recentSection: {
+  breakdownValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  distributionSection: {
+    marginTop: 16,
     backgroundColor: 'transparent',
   },
+  distributionLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    backgroundColor: 'transparent',
+  },
+  distributionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  distributionPercent: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  distributionBar: {
+    flexDirection: 'row',
+    height: 12,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#E2E8F0',
+  },
+  distributionCollect: {
+    backgroundColor: '#10B981',
+  },
+  distributionPay: {
+    backgroundColor: '#EF4444',
+  },
+  distributionLegend: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 10,
+    backgroundColor: 'transparent',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  legendText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
   section: {
+    marginBottom: 28,
     backgroundColor: 'transparent',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
     backgroundColor: 'transparent',
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  sectionLink: {
+    fontSize: 14,
     fontWeight: '700',
+    color: '#6366F1',
   },
-  filterTabs: {
+  insightRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(148, 163, 184, 0.1)',
-    borderRadius: 8,
-    padding: 2,
-  },
-  filterTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  filterTabActive: {
-    backgroundColor: '#0F172A',
-  },
-  filterTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  filterTabTextActive: {
-    color: '#FFFFFF',
-  },
-  emptyCard: {
-    alignItems: 'center',
-    padding: 40,
-    borderStyle: 'dashed',
+    gap: 12,
+    marginBottom: 14,
     backgroundColor: 'transparent',
   },
-  emptyText: {
-    color: '#94A3B8',
-    fontSize: 16,
-    marginBottom: 20,
+  insightCard: {
+    flex: 1,
+    padding: 14,
   },
-  emptyButton: {
-    backgroundColor: '#6366F1',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+  insightIcon: {
+    width: 34,
+    height: 34,
     borderRadius: 12,
-  },
-  emptyButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  loanItemWrapper: {
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  loanCard: {
+  insightValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  insightLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  emptyCard: {
+    padding: 22,
+    alignItems: 'flex-start',
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#64748B',
+    marginBottom: 14,
+  },
+  emptyButton: {
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  listItemWrapper: {
+    marginBottom: 12,
+  },
+  listCard: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 16,
   },
-  loanItemLeft: {
+  listLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
     backgroundColor: 'transparent',
   },
   iconBox: {
-    width: 48,
-    height: 48,
+    width: 46,
+    height: 46,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 14,
   },
-  loanInfo: {
+  listInfo: {
+    flex: 1,
     backgroundColor: 'transparent',
   },
-  contactName: {
+  listName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 3,
   },
-  loanSub: {
+  listMeta: {
     fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
+    color: '#0F172A',
+    fontWeight: '700',
+    marginBottom: 2,
   },
-  loanItemRight: {
+  listSub: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#64748B',
+  },
+  listRight: {
     alignItems: 'flex-end',
     backgroundColor: 'transparent',
+    marginLeft: 12,
   },
   amountText: {
     fontSize: 16,
-    fontWeight: '700',
-  },
-  itemBadge: {
-    fontSize: 10,
     fontWeight: '800',
-    color: '#6366F1',
-    backgroundColor: 'rgba(99, 102, 241, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
   },
   statusBadge: {
     fontSize: 11,
     color: '#94A3B8',
     textTransform: 'uppercase',
-    fontWeight: '600',
+    fontWeight: '700',
     marginTop: 4,
   },
   fab: {
     position: 'absolute',
     right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     backgroundColor: '#6366F1',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#6366F1',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 8,
   },

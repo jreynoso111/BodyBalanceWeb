@@ -3,27 +3,20 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import 'react-native-reanimated';
+import Constants from 'expo-constants';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/hooks/useAuth';
 import { disablePushNotifications, registerForPushNotificationsAsync } from '@/services/notificationService';
-import * as Notifications from 'expo-notifications';
 import { useColorScheme } from '@/components/useColorScheme';
 import { GreetingRotator } from '@/components/GreetingRotator';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuthStore } from '@/store/authStore';
 import { getOrCreateUserPreferences } from '@/services/userPreferences';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+const isAndroidExpoGo = Constants.appOwnership === 'expo' && Platform.OS === 'android';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -32,7 +25,7 @@ export {
 
 export const unstable_settings = {
   // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
+  initialRouteName: 'index',
 };
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -61,13 +54,31 @@ export default function RootLayout() {
   return <RootLayoutNav />;
 }
 
-import { AnimatedBackground } from '@/components/AnimatedBackground';
-
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { t } = useI18n();
   const user = useAuthStore((state) => state.user);
   useAuth(); // Handle redirects based on auth state
+
+  useEffect(() => {
+    if (isAndroidExpoGo) return;
+
+    try {
+      const loadModule = eval('require') as NodeRequire;
+      const Notifications = loadModule('expo-notifications') as typeof import('expo-notifications');
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowAlert: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+          shouldShowBanner: true,
+          shouldShowList: true,
+        }),
+      });
+    } catch (error) {
+      console.warn('expo-notifications unavailable in layout:', error);
+    }
+  }, []);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -78,7 +89,7 @@ function RootLayoutNav() {
       if (cancelled || error || !data) return;
 
       if (data.push_enabled) {
-        await registerForPushNotificationsAsync({ requestPermission: true, userId: user.id });
+        await registerForPushNotificationsAsync({ requestPermission: false, userId: user.id });
         return;
       }
 
@@ -128,9 +139,9 @@ function RootLayoutNav() {
   }, [t]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <GreetingRotator />
-      <AnimatedBackground>
+    <SafeAreaProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <GreetingRotator />
         <Stack
           screenOptions={{
             headerTransparent: true,
@@ -163,7 +174,7 @@ function RootLayoutNav() {
           <Stack.Screen name="faq" options={{ title: t('FAQ') }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         </Stack>
-      </AnimatedBackground>
-    </ThemeProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

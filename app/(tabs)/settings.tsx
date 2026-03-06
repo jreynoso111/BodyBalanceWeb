@@ -16,6 +16,7 @@ export default function SettingsScreen() {
     const router = useRouter();
     const [prefs, setPrefs] = React.useState(DEFAULT_USER_PREFERENCES);
     const normalizedRole = (role || '').toLowerCase().trim();
+    const hasAdminAccess = normalizedRole === 'admin' || normalizedRole === 'administrator';
 
     useFocusEffect(
         React.useCallback(() => {
@@ -70,7 +71,7 @@ export default function SettingsScreen() {
         { icon: CircleHelp, label: 'Help & Support', sub: 'FAQ & contact', onPress: () => router.push('/help-support') },
     ];
 
-    if (normalizedRole === 'admin') {
+    if (hasAdminAccess) {
         menuItems.unshift({
             icon: Shield,
             label: 'Admin Dashboard',

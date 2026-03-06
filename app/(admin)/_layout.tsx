@@ -7,12 +7,13 @@ export default function AdminLayout() {
     const { role, initialized } = useAuthStore();
     const { t } = useI18n();
     const normalizedRole = (role || '').toLowerCase().trim();
+    const hasAdminAccess = normalizedRole === 'admin' || normalizedRole === 'administrator';
 
     if (!initialized) {
         return null; // Wait for auth store to load
     }
 
-    if (normalizedRole !== 'admin') {
+    if (!hasAdminAccess) {
         // Redirect standard users back to home
         return <Redirect href="/(tabs)" />;
     }

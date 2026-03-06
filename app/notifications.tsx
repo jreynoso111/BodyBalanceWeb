@@ -154,28 +154,28 @@ export default function NotificationsScreen() {
         <Card style={styles.card}>
           <PreferenceRow
             title="Push Notifications"
-            subtitle="Alerts for requests, reminders and updates"
+            subtitle="On-device alerts for reminders on this phone"
             value={prefs.push_enabled}
             onChange={() => togglePreference('push_enabled')}
             disabled={!!saving}
           />
           <PreferenceRow
             title="Email Notifications"
-            subtitle="Receive account and activity emails"
+            subtitle="Preference saved for future email delivery rollout"
             value={prefs.email_enabled}
             onChange={() => togglePreference('email_enabled')}
             disabled={!!saving}
           />
           <PreferenceRow
             title="Payment Reminders"
-            subtitle="Get reminder alerts before due dates"
+            subtitle="On-device reminder alerts before due dates"
             value={prefs.reminder_enabled}
             onChange={() => togglePreference('reminder_enabled')}
             disabled={!!saving}
           />
           <PreferenceRow
             title="Product Updates"
-            subtitle="Tips and feature announcements"
+            subtitle="Preference saved for future feature announcements"
             value={prefs.marketing_enabled}
             onChange={() => togglePreference('marketing_enabled')}
             noBorder

@@ -1,17 +1,23 @@
 import React from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { Home, Users, Settings } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useI18n } from '@/hooks/useI18n';
+import { useAuthStore } from '@/store/authStore';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme() || 'light';
   const { t } = useI18n();
   const router = useRouter();
   const segments = useSegments();
+  const { user, initialized } = useAuthStore();
+
+  if (initialized && !user) {
+    return <Redirect href="/" />;
+  }
 
   const currentTabSegment = segments[1];
   const activeTab = currentTabSegment === 'contacts'

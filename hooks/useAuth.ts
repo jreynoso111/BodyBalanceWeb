@@ -8,6 +8,12 @@ import { normalizeLanguage } from '@/constants/i18n';
 const LAST_PROTECTED_PATH_KEY = 'last_protected_path';
 const isMissingDefaultLanguageColumn = (message?: string) =>
     String(message || '').toLowerCase().includes('default_language');
+const normalizeRole = (role?: string | null) => {
+    const normalized = String(role || '').toLowerCase().trim();
+    if (normalized === 'administrator') return 'admin';
+    if (normalized) return normalized;
+    return 'user';
+};
 
 export const useAuth = () => {
     const { setSession, setUser, setRole, setLanguage, setInitialized, session, initialized } = useAuthStore();
@@ -32,10 +38,7 @@ export const useAuth = () => {
             error = fallback.error as any;
         }
 
-        const normalizedRole =
-            typeof (data as any)?.role === 'string' && (data as any).role.trim().length > 0
-                ? (data as any).role.toLowerCase().trim()
-                : 'user';
+        const normalizedRole = normalizeRole((data as any)?.role);
 
         const language = normalizeLanguage((data as any)?.default_language);
 
@@ -124,6 +127,8 @@ export const useAuth = () => {
                 const hasSafeRecoverPath =
                     !!lastPath &&
                     lastPath !== pathname &&
+                    !lastPath.startsWith('/admin') &&
+                    !lastPath.startsWith('/(admin)') &&
                     !lastPath.startsWith('/new-contact') &&
                     !lastPath.startsWith('/new-loan') &&
                     !lastPath.startsWith('/register-payment');
