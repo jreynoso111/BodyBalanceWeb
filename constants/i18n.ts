@@ -86,11 +86,25 @@ const TRANSLATIONS: Record<string, TranslationEntry> = {
   Decline: { es: 'Declinar', fr: 'Refuser', it: 'Rifiuta' },
 };
 
-export const normalizeLanguage = (value?: string | null): AppLanguage => {
+export const getDeviceLanguage = (): AppLanguage => {
+  try {
+    const locale =
+      Intl.DateTimeFormat().resolvedOptions().locale ||
+      (typeof navigator !== 'undefined' ? navigator.language : '') ||
+      'en';
+
+    return normalizeLanguage(locale, 'en');
+  } catch {
+    return 'en';
+  }
+};
+
+export const normalizeLanguage = (value?: string | null, fallback: AppLanguage = 'en'): AppLanguage => {
   const normalized = String(value || '').trim().toLowerCase();
-  return SUPPORTED_LANGUAGES.some((lang) => lang.code === normalized)
-    ? (normalized as AppLanguage)
-    : 'en';
+  const baseLanguage = normalized.split('-')[0].split('_')[0];
+  return SUPPORTED_LANGUAGES.some((lang) => lang.code === baseLanguage)
+    ? (baseLanguage as AppLanguage)
+    : fallback;
 };
 
 export const translateText = (input: string, language: AppLanguage): string => {

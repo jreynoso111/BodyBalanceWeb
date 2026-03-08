@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
-import { AppLanguage } from '@/constants/i18n';
+import { AppLanguage, getDeviceLanguage } from '@/constants/i18n';
 import { PlanTier } from '@/services/subscriptionPlan';
 
 interface AuthState {
@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     user: null,
     role: null,
     planTier: 'free',
-    language: 'en',
+    language: getDeviceLanguage(),
     initialized: false,
     referralReward: null,
     setSession: (session) => set({ session }),

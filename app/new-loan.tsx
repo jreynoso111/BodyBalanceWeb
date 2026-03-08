@@ -3,7 +3,7 @@ import { StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, KeyboardAvo
 import { Text, View, Screen, Card } from '@/components/Themed';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
-import { useRouter, Stack, useFocusEffect } from 'expo-router';
+import { useRouter, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { X, Camera, Wallet, Box, Plus, ChevronDown, BellDot, FileText, UserPlus, Check, Search } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
@@ -71,6 +71,8 @@ type ReminderFrequency = 'none' | 'daily' | 'weekly' | 'custom' | 'monthly' | 'y
 export default function NewLoanScreen() {
   const { user, planTier } = useAuthStore();
   const router = useRouter();
+  const { contactId: initialContactIdParam } = useLocalSearchParams<{ contactId?: string | string[] }>();
+  const initialContactId = Array.isArray(initialContactIdParam) ? initialContactIdParam[0] : initialContactIdParam;
 
   const [category, setCategory] = useState<'money' | 'item'>('money');
   const [amount, setAmount] = useState('');
@@ -162,6 +164,10 @@ export default function NewLoanScreen() {
     }
 
     setContacts(newContacts);
+
+    if (initialContactId && newContacts.some((contact) => contact.id === initialContactId)) {
+      setContactId(initialContactId);
+    }
   };
 
   const handleRefresh = async () => {

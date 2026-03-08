@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View as RNView } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
 
@@ -7,37 +7,62 @@ const FAQ_ITEMS = [
   {
     question: 'How do I create a new record?',
     answer:
-      'Add or pick a contact first, then use the "+" button from Home. You can choose a money record or an item record and save who shared what, how much, and when it should come back.',
+      'You can create a new record from the Home screen using the main "+" action, or directly from an expanded contact card using "Add record". Choose whether it is a money or item record, then save the amount, owner direction, and any due date details.',
   },
   {
-    question: 'How do I add a payment or mark something as returned?',
+    question: 'What is the difference between "they owe you" and "you owe"?',
     answer:
-      'Open the record details screen and use "Add payment" for money or "Mark as Returned" for items. Payments are logged manually so the history stays clear even if the real transfer happened outside the app.',
+      'These values reflect direction. "They owe you" means you lent money or an item. "You owe" means the other person lent it to you. Open Balance summarizes the net position across your active records.',
+  },
+  {
+    question: 'What happens when the balance is zero?',
+    answer:
+      'A zero balance is treated as neutral. The app should not present that state as "you lent more" or "you owe more" because neither side is ahead when the balance is fully settled.',
+  },
+  {
+    question: 'How do I add a payment or mark an item as returned?',
+    answer:
+      'Open the record details screen and use "Add payment" for money records or the return action for item records. These actions update the balance while preserving the history so both users can understand what happened over time.',
   },
   {
     question: 'What does "Adjust total" do?',
     answer:
-      'Adjust total changes the original amount of the record without deleting the payments already logged below. If the record is shared with the other person, the action becomes "Suggest new total" so they can confirm it.',
+      'Adjust total changes the original record amount without deleting payments that were already logged. In shared scenarios this can become a suggested change that the other side reviews, so the timeline stays auditable instead of silently rewriting history.',
   },
   {
-    question: 'Where can I see the history with one contact?',
+    question: 'When does the other user need to approve something?',
     answer:
-      'Go to Contacts and tap the contact row to expand it. You will see a compact snapshot, recent activity, open records, and a "View history" button for the full timeline with that person.',
+      'Approvals are used for workflows that can materially change a shared state, such as some confirmations or suggested updates. Other actions can be sent as informational events only, so the other user is notified without being asked to approve.',
   },
   {
-    question: 'Does the app move real money?',
+    question: 'Why did the other person get a notification but no approval request?',
     answer:
-      'No. I GOT YOU is only a shared memory and tracking app for people who lend money or items between friends and family. Real transfers still happen outside the app and are recorded here afterward.',
+      'Some shared actions are intentionally informational. For example, when a connected friend account is involved, the system can create an event so the other user sees that the record activity happened, but the event is not treated as a pending confirmation.',
   },
   {
-    question: 'Why do I still need confirmations?',
+    question: 'How do I manage contacts faster?',
     answer:
-      'Confirmations help when a record or payment is shared with the other person. They are there to avoid misunderstandings, not to act like a bank workflow.',
+      'Go to Contacts and tap a row to expand it. From there you can review recent activity, inspect open records, edit the contact, and create a new record tied to that contact without selecting them again.',
+  },
+  {
+    question: 'What do the notifications counts mean in admin tools?',
+    answer:
+      'Admin counters are shortcuts into the underlying queues. Pending confirmations, friend requests, and total records can be opened as filtered admin views so you can inspect the actual items instead of just seeing the counts.',
+  },
+  {
+    question: 'What does Premium change?',
+    answer:
+      'Premium unlocks premium-only capabilities such as export and broader record management benefits. When the active account is Premium, the app can show that plan status in the header and in Settings.',
   },
   {
     question: 'Can I export my records?',
     answer:
-      'Yes. Go to Settings and use "Export Data (CSV)" to export your records, payments, and contacts.',
+      'Yes. Premium users can go to Settings and use "Export Data (CSV)" to download records, payments, and related contact data.',
+  },
+  {
+    question: 'Does Buddy Balance move real money?',
+    answer:
+      'No. The app is a ledger, reminder, and shared history tool. Real payments and item handoffs happen outside the app and are then recorded here for tracking.',
   },
 ] as const;
 
@@ -47,9 +72,10 @@ export default function FAQScreen() {
       <Stack.Screen options={{ title: 'Frequently Asked Questions' }} />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Card style={styles.introCard}>
-          <Text style={styles.introTitle}>Current guide</Text>
+          <Text style={styles.introTitle}>Current FAQ</Text>
           <Text style={styles.introText}>
-            This help section is kept aligned with the current app behavior, especially around contacts, payments, shared confirmations, and record adjustments.
+            These answers reflect the current behavior of contacts, shared records, notifications, Premium,
+            and admin review flows in the app today.
           </Text>
         </Card>
 

@@ -6,7 +6,7 @@ import { Screen, Card, Text, View } from '@/components/Themed';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/services/supabase';
 import { CURRENCIES } from '@/constants/Currencies';
-import { AppLanguage, normalizeLanguage, SUPPORTED_LANGUAGES } from '@/constants/i18n';
+import { AppLanguage, getDeviceLanguage, normalizeLanguage, SUPPORTED_LANGUAGES } from '@/constants/i18n';
 import { useI18n } from '@/hooks/useI18n';
 import { ArrowLeft, Camera, House, Trash2 } from 'lucide-react-native';
 import {
@@ -35,7 +35,7 @@ export default function ProfileScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [currencyDefault, setCurrencyDefault] = useState('USD');
-  const [defaultLanguage, setDefaultLanguage] = useState<AppLanguage>('en');
+  const [defaultLanguage, setDefaultLanguage] = useState<AppLanguage>(getDeviceLanguage());
   const [friendCode, setFriendCode] = useState('');
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [inviteSummary, setInviteSummary] = useState<InviteSummary | null>(null);
@@ -129,7 +129,7 @@ export default function ProfileScreen() {
       setEmail(data.email || user.email || '');
       setPhone(data.phone || '');
       setCurrencyDefault(data.currency_default || 'USD');
-      setDefaultLanguage(normalizeLanguage((data as any).default_language));
+      setDefaultLanguage(normalizeLanguage((data as any).default_language, getDeviceLanguage()));
       setFriendCode(resolvedFriendCode);
       setFriendCodeStatus(resolvedFriendCode ? 'ready' : 'missing');
       setPlanTier(normalizePlanTier((data as any)?.plan_tier, (data as any)?.premium_referral_expires_at));

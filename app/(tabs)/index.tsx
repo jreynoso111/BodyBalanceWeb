@@ -323,7 +323,9 @@ export default function DashboardScreen() {
   };
 
   const balance = summary.lent - summary.borrowed;
+  const hasOpenBalance = summary.lent + summary.borrowed > 0;
   const balanceTone = getBalanceTone(summary.lent, summary.borrowed);
+  const balanceDirection = !hasOpenBalance ? 'neutral' : balance > 0 ? 'positive' : 'negative';
 
   return (
     <Screen style={styles.container} safeAreaEdges={['left', 'right', 'bottom']}>
@@ -377,60 +379,98 @@ export default function DashboardScreen() {
                 <Text style={styles.balanceLabel}>Open balance</Text>
                 <Text style={styles.balanceValue}>{formatSignedCurrency(balance)}</Text>
               </RNView>
-              <RNView style={[styles.netBadge, balance >= 0 ? styles.netBadgePositive : styles.netBadgeNegative]}>
-                <Text style={[styles.netBadgeText, balance >= 0 ? styles.netBadgeTextPositive : styles.netBadgeTextNegative]}>
-                  {balance >= 0 ? 'You lent more' : 'You borrowed more'}
+              <RNView
+                style={[
+                  styles.netBadge,
+                  balanceDirection === 'positive'
+                    ? styles.netBadgePositive
+                    : balanceDirection === 'negative'
+                      ? styles.netBadgeNegative
+                      : styles.netBadgeNeutral,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.netBadgeText,
+                    balanceDirection === 'positive'
+                      ? styles.netBadgeTextPositive
+                      : balanceDirection === 'negative'
+                        ? styles.netBadgeTextNegative
+                        : styles.netBadgeTextNeutral,
+                  ]}
+                >
+                  {balanceDirection === 'positive'
+                    ? 'You lent more'
+                    : balanceDirection === 'negative'
+                      ? 'You borrowed more'
+                      : 'No open balance'}
                 </Text>
               </RNView>
             </RNView>
             <Text style={styles.balanceHint}>
-              {balance >= 0 ? 'Right now, friends owe you more than you owe them.' : 'Right now, you owe more than friends owe you.'}
+              {balanceDirection === 'positive'
+                ? 'Right now, friends owe you more than you owe them.'
+                : balanceDirection === 'negative'
+                  ? 'Right now, you owe more than friends owe you.'
+                  : "Right now, you're all settled up."}
             </Text>
 
             <RNView style={styles.balanceBreakdownRow}>
               <RNView style={styles.balanceBreakdownCard}>
-                <RNView style={[styles.statIcon, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-                  <ArrowUpRight size={18} color="#10B981" />
+                <RNView style={[styles.statIcon, { backgroundColor: hasOpenBalance ? 'rgba(16, 185, 129, 0.12)' : 'rgba(148, 163, 184, 0.12)' }]}>
+                  <ArrowUpRight size={18} color={hasOpenBalance ? '#10B981' : '#64748B'} />
                 </RNView>
                 <Text style={styles.breakdownLabel}>They owe you</Text>
-                <Text style={[styles.breakdownValue, { color: '#047857' }]}>{formatCurrency(summary.lent)}</Text>
+                <Text style={[styles.breakdownValue, { color: hasOpenBalance ? '#047857' : '#475569' }]}>{formatCurrency(summary.lent)}</Text>
               </RNView>
               <RNView style={styles.balanceBreakdownCard}>
-                <RNView style={[styles.statIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
-                  <ArrowDownLeft size={18} color="#EF4444" />
+                <RNView style={[styles.statIcon, { backgroundColor: hasOpenBalance ? 'rgba(239, 68, 68, 0.12)' : 'rgba(148, 163, 184, 0.12)' }]}>
+                  <ArrowDownLeft size={18} color={hasOpenBalance ? '#EF4444' : '#64748B'} />
                 </RNView>
                 <Text style={styles.breakdownLabel}>You owe</Text>
-                <Text style={[styles.breakdownValue, { color: '#B91C1C' }]}>{formatCurrency(summary.borrowed)}</Text>
+                <Text style={[styles.breakdownValue, { color: hasOpenBalance ? '#B91C1C' : '#475569' }]}>{formatCurrency(summary.borrowed)}</Text>
               </RNView>
             </RNView>
 
             <RNView style={styles.distributionSection}>
               <RNView style={styles.distributionLabels}>
                 <Text style={styles.distributionTitle}>Balance mix</Text>
-                <Text style={styles.distributionPercent}>{getCollectShare(summary.lent, summary.borrowed)}% owed to you</Text>
+                <Text style={styles.distributionPercent}>
+                  {hasOpenBalance ? `${getCollectShare(summary.lent, summary.borrowed)}% owed to you` : 'No open balances'}
+                </Text>
               </RNView>
               <RNView style={styles.distributionBar}>
-                <RNView
-                  style={[
-                    styles.distributionCollect,
-                    { flex: Math.max(summary.lent, 0.0001) },
-                  ]}
-                />
-                <RNView
-                  style={[
-                    styles.distributionPay,
-                    { flex: Math.max(summary.borrowed, 0.0001) },
-                  ]}
-                />
+                {hasOpenBalance ? (
+                  <>
+                    <RNView
+                      style={[
+                        styles.distributionCollect,
+                        { flex: Math.max(summary.lent, 0.0001) },
+                      ]}
+                    />
+                    <RNView
+                      style={[
+                        styles.distributionPay,
+                        { flex: Math.max(summary.borrowed, 0.0001) },
+                      ]}
+                    />
+                  </>
+                ) : (
+                  <RNView style={styles.distributionNeutral} />
+                )}
               </RNView>
               <RNView style={styles.distributionLegend}>
                 <RNView style={styles.legendItem}>
-                  <RNView style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                  <Text style={styles.legendText}>{getCollectShare(summary.lent, summary.borrowed)}% owed to you</Text>
+                  <RNView style={[styles.legendDot, { backgroundColor: hasOpenBalance ? '#10B981' : '#94A3B8' }]} />
+                  <Text style={styles.legendText}>
+                    {hasOpenBalance ? `${getCollectShare(summary.lent, summary.borrowed)}% owed to you` : '$0 owed to you'}
+                  </Text>
                 </RNView>
                 <RNView style={styles.legendItem}>
-                  <RNView style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-                  <Text style={styles.legendText}>{100 - getCollectShare(summary.lent, summary.borrowed)}% you owe</Text>
+                  <RNView style={[styles.legendDot, { backgroundColor: hasOpenBalance ? '#EF4444' : '#94A3B8' }]} />
+                  <Text style={styles.legendText}>
+                    {hasOpenBalance ? `${100 - getCollectShare(summary.lent, summary.borrowed)}% you owe` : '$0 you owe'}
+                  </Text>
                 </RNView>
               </RNView>
             </RNView>
@@ -637,12 +677,19 @@ function getTimestamp(value?: string | null) {
 
 function getCollectShare(lent: number, borrowed: number) {
   const total = lent + borrowed;
-  if (total <= 0) return 50;
+  if (total <= 0) return 0;
   return Math.round((lent / total) * 100);
 }
 
 function getBalanceTone(lent: number, borrowed: number) {
   const total = lent + borrowed;
+  if (total <= 0) {
+    return {
+      gradient: ['#FFFFFF', '#F8FAFC'] as [string, string],
+      border: '#E2E8F0',
+    };
+  }
+
   const score = total <= 0 ? 0 : (lent - borrowed) / total;
 
   if (score >= 0) {
@@ -956,6 +1003,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.42)',
     borderColor: 'rgba(239, 68, 68, 0.16)',
   },
+  netBadgeNeutral: {
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderColor: 'rgba(148, 163, 184, 0.22)',
+  },
   netBadgeText: {
     fontSize: 12,
     fontWeight: '800',
@@ -967,6 +1018,9 @@ const styles = StyleSheet.create({
   },
   netBadgeTextNegative: {
     color: '#B91C1C',
+  },
+  netBadgeTextNeutral: {
+    color: '#475569',
   },
   balanceBreakdownRow: {
     flexDirection: 'row',
@@ -1030,6 +1084,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: 'hidden',
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  distributionNeutral: {
+    flex: 1,
+    backgroundColor: '#CBD5E1',
   },
   distributionCollect: {
     backgroundColor: '#10B981',

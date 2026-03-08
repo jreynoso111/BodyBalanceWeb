@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useRouter, Stack, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { X, Check, Trash2 } from 'lucide-react-native';
 import { countLinkedFriends, PLAN_LIMITS } from '@/services/subscriptionPlan';
+import { AppLegalFooter } from '@/components/AppLegalFooter';
 
 export default function NewContactScreen() {
     const { user, planTier } = useAuthStore();
@@ -619,7 +620,7 @@ export default function NewContactScreen() {
                     </TouchableOpacity>
                 )}
 
-                <Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
+                <AppLegalFooter style={styles.copyright} />
             </ScrollView>
 
             <Modal

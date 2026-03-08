@@ -5,6 +5,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { ArrowRight, ShieldCheck, Zap } from 'lucide-react-native';
 import { AnimatedBackground } from '@/components/AnimatedBackground';
 import { BrandLogo } from '@/components/BrandLogo';
+import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -57,7 +58,7 @@ export default function LandingPage() {
                 </View>
 
                 <View style={styles.footer}>
-                    <Text style={styles.footerText}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
+                    <AppLegalFooter style={styles.footerText} />
                 </View>
             </SafeAreaView>
         </AnimatedBackground>

@@ -34,6 +34,7 @@ export default function AdminLayout() {
             <Stack.Screen name="index" options={{ title: t('Admin Dashboard') }} />
             <Stack.Screen name="users" options={{ title: t('Platform Users') }} />
             <Stack.Screen name="loans" options={{ title: t('Platform Lend/Borrow') }} />
+            <Stack.Screen name="requests" options={{ title: t('Admin Requests') }} />
         </Stack>
     );
 }

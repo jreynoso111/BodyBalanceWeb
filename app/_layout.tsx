@@ -100,6 +100,7 @@ function RootLayoutNav() {
           <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
           <Stack.Screen name="security" options={{ title: 'Security' }} />
           <Stack.Screen name="help-support" options={{ title: 'Help & Support' }} />
+          <Stack.Screen name="help/[slug]" options={{ title: 'Help' }} />
           <Stack.Screen name="terms" options={{ title: 'Terms of Service' }} />
           <Stack.Screen name="privacy" options={{ title: 'Privacy Policy' }} />
           <Stack.Screen name="faq" options={{ title: 'FAQ' }} />

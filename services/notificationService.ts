@@ -56,6 +56,9 @@ export async function showSharedUpdateNotification(options: {
     if (options.type === 'friend_request') {
         title = 'New friend request';
         body = options.message?.trim() || `${sender} wants to connect with you.`;
+    } else if (options.type === 'loan_notice') {
+        title = 'Shared record added';
+        body = options.message?.trim() || `${sender} added a shared record with you.`;
     } else if (options.type === 'loan_validation') {
         title = 'Shared record request';
         body = options.message?.trim() || `${sender} shared a new record with you.`;

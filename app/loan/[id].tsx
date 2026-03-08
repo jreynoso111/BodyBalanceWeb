@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text as RNText, ScrollView, TouchableOpacity, Alert, ActivityIndicator, View as RNView, TextInput, Image, Modal, Platform, RefreshControl } from 'react-native';
 import { Text, View, Screen, Card } from '@/components/Themed';
+import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { useLocalSearchParams, useNavigation, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { CommonActions } from '@react-navigation/native';
 import { supabase } from '@/services/supabase';
@@ -1031,7 +1032,7 @@ export default function LoanDetailScreen() {
                     </RNView>
                 </RNView>
 
-                <Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
+                <AppLegalFooter style={styles.copyright} />
             </ScrollView>
 
             <Modal

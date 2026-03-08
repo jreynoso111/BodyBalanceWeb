@@ -6,6 +6,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Mail, Lock } from 'lucide-react-native';
 import { BrandLogo } from '@/components/BrandLogo';
 import { GoogleLogo } from '@/components/GoogleLogo';
+import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { waitForAuthSession } from '@/services/authSession';
 import { getGoogleOAuthUnavailableReason, isGoogleOAuthEnabledForBuild, signInWithGoogle } from '@/services/oauth';
 
@@ -255,7 +256,7 @@ export default function LoginScreen() {
                         ) : null}
                     </Card>
 
-                    <Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
+                    <AppLegalFooter style={styles.copyright} />
                 </RNView>
             </KeyboardAvoidingView>
         </Screen>

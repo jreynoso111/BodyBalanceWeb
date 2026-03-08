@@ -6,6 +6,7 @@ import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { X, Check, Wallet, Info, Box, Trash2 } from 'lucide-react-native';
 import { Screen, Card, View as ThemedView, Text as ThemedText } from '@/components/Themed';
+import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { getCurrencySymbol } from '@/constants/Currencies';
 import { cancelLoanReminders, upsertLoanReminderForUser } from '@/services/notificationService';
 
@@ -691,7 +692,7 @@ export default function RegisterPaymentScreen() {
                         </TouchableOpacity>
                     )}
 
-                    <Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
+                    <AppLegalFooter style={styles.copyright} />
                 </View>
             </KeyboardAvoidingView>
         </Screen>

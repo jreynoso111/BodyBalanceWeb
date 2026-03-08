@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSegments } from 'expo-router';
-import { supabase } from '@/services/supabase';
+import { clearPersistedAuthState, supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { normalizeLanguage } from '@/constants/i18n';
+import { getDeviceLanguage, normalizeLanguage } from '@/constants/i18n';
 import { normalizePlanTier } from '@/services/subscriptionPlan';
 import { showSharedUpdateNotification } from '@/services/notificationService';
 import { getMyInviteSummary, getMyPendingPremiumCelebration } from '@/services/referrals';
@@ -20,6 +20,10 @@ const NON_RECOVERABLE_PATH_PREFIXES = [
 ];
 const isMissingDefaultLanguageColumn = (message?: string) =>
     String(message || '').toLowerCase().includes('default_language');
+const isInvalidRefreshTokenError = (message?: string) => {
+    const normalized = String(message || '').toLowerCase();
+    return normalized.includes('invalid refresh token') || normalized.includes('refresh token not found');
+};
 const normalizeRole = (role?: string | null) => {
     const normalized = String(role || '').toLowerCase().trim();
     if (normalized === 'administrator') return 'admin';
@@ -34,6 +38,16 @@ export const useAuth = () => {
     const segments = useSegments();
     const profileSyncInFlightRef = useRef(false);
     const profileSyncQueuedRef = useRef(false);
+
+    const resetLocalAuthState = async () => {
+        await AsyncStorage.removeItem(LAST_PROTECTED_PATH_KEY);
+        await clearPersistedAuthState();
+        setSession(null);
+        setUser(null);
+        setRole(null);
+        setPlanTier('free');
+        setLanguage(getDeviceLanguage());
+    };
 
     const isRecoverableProtectedPath = (value?: string | null) => {
         if (!value) return false;
@@ -59,7 +73,7 @@ export const useAuth = () => {
 
         const normalizedRole = normalizeRole((data as any)?.role);
         const planTier = normalizePlanTier((data as any)?.plan_tier, (data as any)?.premium_referral_expires_at);
-        const language = normalizeLanguage((data as any)?.default_language);
+        const language = normalizeLanguage((data as any)?.default_language, getDeviceLanguage());
 
         return { normalizedRole, planTier, language };
     };
@@ -114,19 +128,41 @@ export const useAuth = () => {
     useEffect(() => {
         // 1. Initial session check
         const checkSession = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            setSession(session);
-            setUser(session?.user ?? null);
+            try {
+                const {
+                    data: { session },
+                    error,
+                } = await supabase.auth.getSession();
 
-            if (session?.user?.id) {
-                await syncProfileState(session.user.id);
-            } else {
+                if (error && isInvalidRefreshTokenError(error.message)) {
+                    console.warn('clearing invalid persisted auth session:', error.message);
+                    await resetLocalAuthState();
+                    return;
+                }
+
+                setSession(session);
+                setUser(session?.user ?? null);
+
+                if (session?.user?.id) {
+                    await syncProfileState(session.user.id);
+                } else {
+                    setRole(null);
+                    setPlanTier('free');
+                    setLanguage(getDeviceLanguage());
+                }
+            } catch (error: any) {
+                if (isInvalidRefreshTokenError(error?.message)) {
+                    console.warn('clearing invalid persisted auth session:', error.message);
+                    await resetLocalAuthState();
+                    return;
+                }
+                console.error('auth session initialization failed:', error?.message || error);
                 setRole(null);
                 setPlanTier('free');
-                setLanguage('en');
+                setLanguage(getDeviceLanguage());
+            } finally {
+                setInitialized(true);
             }
-
-            setInitialized(true);
         };
 
         checkSession();
@@ -142,7 +178,7 @@ export const useAuth = () => {
                 } else {
                     setRole(null);
                     setPlanTier('free');
-                    setLanguage('en');
+                    setLanguage(getDeviceLanguage());
                     // Prevent stale protected-route recovery after a sign-out.
                     await AsyncStorage.removeItem(LAST_PROTECTED_PATH_KEY);
                 }

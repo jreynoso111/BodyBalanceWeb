@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, FlatList, TouchableOpacity, View as RNView, Alert, RefreshControl } from 'react-native';
 import { Text, View, Screen, Card } from '@/components/Themed';
+import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { Stack } from 'expo-router';
@@ -363,7 +364,7 @@ export default function RequestsScreen() {
                         <Text style={styles.emptyDesc}>When someone shares or updates a record with you, it will show up here.</Text>
                     </View>
                 }
-                ListFooterComponent={<Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>}
+                ListFooterComponent={<AppLegalFooter style={styles.copyright} />}
             />
         </Screen>
     );

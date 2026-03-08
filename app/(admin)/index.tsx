@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { AlertCircle, ArrowDownToLine, BellRing, ChevronRight, Crown, RefreshCcw, Search, TrendingUp, UserMinus, Users, Wallet } from 'lucide-react-native';
+import { AlertCircle, ArrowDownToLine, BellRing, ChevronDown, ChevronRight, ChevronUp, Crown, RefreshCcw, Search, TrendingUp, UserMinus, Users, Wallet } from 'lucide-react-native';
 import { Card, Screen } from '@/components/Themed';
 import { supabase } from '@/services/supabase';
 import { getPlanLabel, normalizePlanTier, PlanTier } from '@/services/subscriptionPlan';
@@ -47,6 +47,7 @@ export default function AdminDashboardIndex() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [planUsers, setPlanUsers] = useState<AdminPlanUser[]>([]);
   const [planSearch, setPlanSearch] = useState('');
+  const [planUsersExpanded, setPlanUsersExpanded] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -89,6 +90,11 @@ export default function AdminDashboardIndex() {
       pushShare: formatPercent(stats.push_enabled_users, stats.total_users),
     };
   }, [stats]);
+
+  const pendingAdminConfirmations = Math.max(
+    (stats?.pending_confirmations || 0) - (stats?.pending_friend_requests || 0),
+    0
+  );
 
   const filteredPlanUsers = useMemo(() => {
     const query = planSearch.trim().toLowerCase();
@@ -269,70 +275,98 @@ export default function AdminDashboardIndex() {
             </View>
           </View>
 
-          <View style={styles.planSearchBar}>
-            <Search size={16} color="#94A3B8" />
-            <TextInput
-              value={planSearch}
-              onChangeText={setPlanSearch}
-              placeholder="Search by name or email..."
-              placeholderTextColor="#94A3B8"
-              style={styles.planSearchInput}
-            />
-          </View>
+          <TouchableOpacity
+            style={styles.managedPlanToggle}
+            activeOpacity={0.85}
+            onPress={() => setPlanUsersExpanded((current) => !current)}
+          >
+            <View style={styles.managedPlanToggleCopy}>
+              <Text style={styles.managedPlanToggleTitle}>
+                {planUsersExpanded ? 'Hide managed users' : 'Show managed users'}
+              </Text>
+              <Text style={styles.managedPlanToggleText}>
+                {planUsersExpanded
+                  ? 'Collapse the list to keep the dashboard compact.'
+                  : `${filteredPlanUsers.length} users ready to review without filling the screen.`}
+              </Text>
+            </View>
+            {planUsersExpanded ? <ChevronUp size={18} color="#475569" /> : <ChevronDown size={18} color="#475569" />}
+          </TouchableOpacity>
 
-          <View style={styles.planUsersList}>
-            {filteredPlanUsers.map((user) => {
-              const normalizedPlan = normalizePlanTier(user.plan_tier);
-              const isSaving = savingUserId === user.id;
-              const displayName = user.full_name?.trim() || user.email || 'Unknown user';
-
-              return (
-                <View key={user.id} style={styles.planUserRow}>
-                  <View style={styles.planUserLeft}>
-                    <View style={[styles.planUserAvatar, normalizedPlan === 'premium' ? styles.planUserAvatarPremium : null]}>
-                      <Text style={[styles.planUserAvatarText, normalizedPlan === 'premium' ? styles.planUserAvatarTextPremium : null]}>
-                        {displayName[0]?.toUpperCase() || '?'}
-                      </Text>
-                    </View>
-                    <View style={styles.planUserInfo}>
-                      <Text style={styles.planUserName}>{displayName}</Text>
-                      <Text style={styles.planUserEmail}>{user.email || 'No email'}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.planUserRight}>
-                    <Text style={[styles.inlinePlanBadge, normalizedPlan === 'premium' ? styles.inlinePlanBadgePremium : styles.inlinePlanBadgeFree]}>
-                      {getPlanLabel(normalizedPlan)}
-                    </Text>
-                    <View style={styles.inlinePlanActions}>
-                      <TouchableOpacity
-                        style={[styles.inlinePlanButton, normalizedPlan === 'free' ? styles.inlinePlanButtonActive : null]}
-                        disabled={isSaving || normalizedPlan === 'free'}
-                        onPress={() => void updatePlanTier(user.id, 'free')}
-                      >
-                        <Text style={[styles.inlinePlanButtonText, normalizedPlan === 'free' ? styles.inlinePlanButtonTextActive : null]}>Free</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.inlinePlanButton, normalizedPlan === 'premium' ? styles.inlinePlanButtonPremiumActive : null]}
-                        disabled={isSaving || normalizedPlan === 'premium'}
-                        onPress={() => void updatePlanTier(user.id, 'premium')}
-                      >
-                        <Text style={[styles.inlinePlanButtonText, normalizedPlan === 'premium' ? styles.inlinePlanButtonTextPremiumActive : null]}>
-                          {isSaving ? 'Saving...' : 'Premium'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-
-            {filteredPlanUsers.length === 0 ? (
-              <View style={styles.planUsersEmpty}>
-                <Text style={styles.planUsersEmptyText}>No users match that search.</Text>
+          {planUsersExpanded ? (
+            <>
+              <View style={styles.planSearchBar}>
+                <Search size={16} color="#94A3B8" />
+                <TextInput
+                  value={planSearch}
+                  onChangeText={setPlanSearch}
+                  placeholder="Search by name or email..."
+                  placeholderTextColor="#94A3B8"
+                  style={styles.planSearchInput}
+                />
               </View>
-            ) : null}
-          </View>
+
+              <View style={styles.planUsersList}>
+                {filteredPlanUsers.map((user) => {
+                  const normalizedPlan = normalizePlanTier(user.plan_tier);
+                  const isSaving = savingUserId === user.id;
+                  const displayName = user.full_name?.trim() || user.email || 'Unknown user';
+
+                  return (
+                    <View key={user.id} style={styles.planUserRow}>
+                      <View style={styles.planUserLeft}>
+                        <View style={[styles.planUserAvatar, normalizedPlan === 'premium' ? styles.planUserAvatarPremium : null]}>
+                          <Text style={[styles.planUserAvatarText, normalizedPlan === 'premium' ? styles.planUserAvatarTextPremium : null]}>
+                            {displayName[0]?.toUpperCase() || '?'}
+                          </Text>
+                        </View>
+                        <View style={styles.planUserInfo}>
+                          <Text style={styles.planUserName}>{displayName}</Text>
+                          <Text style={styles.planUserEmail}>{user.email || 'No email'}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.planUserRight}>
+                        <Text style={[styles.inlinePlanBadge, normalizedPlan === 'premium' ? styles.inlinePlanBadgePremium : styles.inlinePlanBadgeFree]}>
+                          {getPlanLabel(normalizedPlan)}
+                        </Text>
+                        <View style={styles.inlinePlanActions}>
+                          <TouchableOpacity
+                            style={[styles.inlinePlanButton, normalizedPlan === 'free' ? styles.inlinePlanButtonActive : null]}
+                            disabled={isSaving || normalizedPlan === 'free'}
+                            onPress={() => void updatePlanTier(user.id, 'free')}
+                          >
+                            <Text style={[styles.inlinePlanButtonText, normalizedPlan === 'free' ? styles.inlinePlanButtonTextActive : null]}>Free</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.inlinePlanButton, normalizedPlan === 'premium' ? styles.inlinePlanButtonPremiumActive : null]}
+                            disabled={isSaving || normalizedPlan === 'premium'}
+                            onPress={() => void updatePlanTier(user.id, 'premium')}
+                          >
+                            <Text style={[styles.inlinePlanButtonText, normalizedPlan === 'premium' ? styles.inlinePlanButtonTextPremiumActive : null]}>
+                              {isSaving ? 'Saving...' : 'Premium'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {filteredPlanUsers.length === 0 ? (
+                  <View style={styles.planUsersEmpty}>
+                    <Text style={styles.planUsersEmptyText}>No users match that search.</Text>
+                  </View>
+                ) : null}
+              </View>
+            </>
+          ) : (
+            <View style={styles.managedPlanCollapsed}>
+              <Text style={styles.managedPlanCollapsedText}>
+                The membership list is collapsed by default so the admin dashboard stays readable.
+              </Text>
+            </View>
+          )}
         </Card>
 
         <Text style={styles.sectionTitle}>Usage</Text>
@@ -356,30 +390,57 @@ export default function AdminDashboardIndex() {
 
         <Text style={styles.sectionTitle}>Notifications & Queue</Text>
         <View style={styles.metricsRow}>
-          <Card style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <BellRing size={16} color="#6366F1" />
-              <Text style={styles.metricLabel}>Pending confirmations</Text>
-            </View>
-            <Text style={styles.metricValue}>{stats?.pending_confirmations || 0}</Text>
-            <Text style={styles.metricMeta}>All open p2p requests</Text>
-          </Card>
-          <Card style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Users size={16} color="#CA8A04" />
-              <Text style={styles.metricLabel}>Friend requests</Text>
-            </View>
-            <Text style={styles.metricValue}>{stats?.pending_friend_requests || 0}</Text>
-            <Text style={styles.metricMeta}>Still waiting for approval</Text>
-          </Card>
-          <Card style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Wallet size={16} color="#10B981" />
-              <Text style={styles.metricLabel}>Total records</Text>
-            </View>
-            <Text style={styles.metricValue}>{stats?.total_loans || 0}</Text>
-            <Text style={styles.metricMeta}>All-time loan/item records</Text>
-          </Card>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/admin/requests?filter=confirmations' as any)}
+          >
+            <Card style={[styles.metricCard, styles.metricCardInteractive]}>
+              <View style={styles.metricHeader}>
+                <BellRing size={16} color="#6366F1" />
+                <Text style={styles.metricLabel}>Pending confirmations</Text>
+              </View>
+              <Text style={styles.metricValue}>{pendingAdminConfirmations}</Text>
+              <Text style={styles.metricMeta}>Pending shared-record actions</Text>
+              <View style={styles.metricActionRow}>
+                <Text style={styles.metricActionText}>Open admin records</Text>
+                <ChevronRight size={16} color="#94A3B8" />
+              </View>
+            </Card>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/admin/requests?filter=friend_requests' as any)}
+          >
+            <Card style={[styles.metricCard, styles.metricCardInteractive]}>
+              <View style={styles.metricHeader}>
+                <Users size={16} color="#CA8A04" />
+                <Text style={styles.metricLabel}>Friend requests</Text>
+              </View>
+              <Text style={styles.metricValue}>{stats?.pending_friend_requests || 0}</Text>
+              <Text style={styles.metricMeta}>Still waiting for approval</Text>
+              <View style={styles.metricActionRow}>
+                <Text style={styles.metricActionText}>Open admin records</Text>
+                <ChevronRight size={16} color="#94A3B8" />
+              </View>
+            </Card>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push('/admin/loans' as any)}
+          >
+            <Card style={[styles.metricCard, styles.metricCardInteractive]}>
+              <View style={styles.metricHeader}>
+                <Wallet size={16} color="#10B981" />
+                <Text style={styles.metricLabel}>Total records</Text>
+              </View>
+              <Text style={styles.metricValue}>{stats?.total_loans || 0}</Text>
+              <Text style={styles.metricMeta}>All-time loan/item records</Text>
+              <View style={styles.metricActionRow}>
+                <Text style={styles.metricActionText}>Open admin records</Text>
+                <ChevronRight size={16} color="#94A3B8" />
+              </View>
+            </Card>
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.sectionTitle}>Store Metrics</Text>
@@ -545,6 +606,10 @@ const styles = StyleSheet.create({
   metricCard: {
     padding: 16,
   },
+  metricCardInteractive: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
   metricHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -566,6 +631,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 12,
     color: '#94A3B8',
+  },
+  metricActionRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'transparent',
+  },
+  metricActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
   },
   planCard: {
     padding: 18,
@@ -659,6 +736,44 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#047857',
     textTransform: 'uppercase',
+  },
+  managedPlanToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  managedPlanToggleCopy: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  managedPlanToggleTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  managedPlanToggleText: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#64748B',
+  },
+  managedPlanCollapsed: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: 'rgba(148, 163, 184, 0.08)',
+  },
+  managedPlanCollapsedText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#64748B',
   },
   planSearchBar: {
     flexDirection: 'row',

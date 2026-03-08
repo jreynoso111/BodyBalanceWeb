@@ -2,9 +2,57 @@ import React, { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TextInput, TouchableOpacity, View as RNView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
-import { MessageCircle, FileText, Shield, CircleHelp, ChevronRight, Wallet } from 'lucide-react-native';
+import {
+  Bell,
+  ChevronRight,
+  CircleHelp,
+  FileText,
+  Shield,
+  Users,
+} from 'lucide-react-native';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/services/supabase';
+import { AppLegalFooter } from '@/components/AppLegalFooter';
+
+type QuickGuideItem = {
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  label: string;
+  sub: string;
+  path: string;
+};
+
+const QUICK_GUIDES: QuickGuideItem[] = [
+  {
+    icon: CircleHelp,
+    label: 'FAQ',
+    sub: 'Updated answers for the current product behavior',
+    path: '/faq',
+  },
+  {
+    icon: Bell,
+    label: 'Notifications and confirmations',
+    sub: 'What requires approval and what shows as an event only',
+    path: '/help/notifications-confirmations',
+  },
+  {
+    icon: Users,
+    label: 'Contacts and shared history',
+    sub: 'Expand a contact card for shortcuts and recent activity',
+    path: '/help/contacts-shared-history',
+  },
+  {
+    icon: FileText,
+    label: 'Terms of Service',
+    sub: 'Read the current usage terms in app',
+    path: '/terms',
+  },
+  {
+    icon: Shield,
+    label: 'Privacy Policy',
+    sub: 'Read how account and record data is handled',
+    path: '/privacy',
+  },
+];
 
 export default function HelpSupportScreen() {
   const router = useRouter();
@@ -12,47 +60,6 @@ export default function HelpSupportScreen() {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-
-  const items = [
-    {
-      icon: CircleHelp,
-      label: 'FAQ',
-      sub: 'Current flows and common questions',
-      onPress: () => router.push('/faq'),
-    },
-    {
-      icon: Wallet,
-      label: 'Payments & adjustments',
-      sub: 'How Add payment and Adjust total work today',
-      onPress: () =>
-        Alert.alert(
-          'Payments & adjustments',
-          'Use "Add payment" to log money or item returns. Use "Adjust total" to correct the original amount without deleting payment history. Shared records may require confirmation as "Suggest new total".'
-        ),
-    },
-    {
-      icon: MessageCircle,
-      label: 'Using contacts',
-      sub: 'Contact details, recent activity, and history',
-      onPress: () =>
-        Alert.alert(
-          'Using contacts',
-          'Tap a contact row to expand it. The expanded view now shows a compact contact snapshot, recent activity, open records, and a "View history" button.'
-        ),
-    },
-    {
-      icon: FileText,
-      label: 'Terms of Service',
-      sub: 'Read in app',
-      onPress: () => router.push('/terms'),
-    },
-    {
-      icon: Shield,
-      label: 'Privacy Policy',
-      sub: 'Read in app',
-      onPress: () => router.push('/privacy'),
-    },
-  ];
 
   const submitSupportMessage = async () => {
     if (!user?.id) {
@@ -85,7 +92,7 @@ export default function HelpSupportScreen() {
 
     setSubject('');
     setMessage('');
-    Alert.alert('Message sent', 'Support communication was recorded successfully.');
+    Alert.alert('Message sent', 'Your support message was saved for admin review.');
   };
 
   return (
@@ -93,18 +100,20 @@ export default function HelpSupportScreen() {
       <Stack.Screen options={{ title: 'Help & Support' }} />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Card style={styles.heroCard}>
-          <Text style={styles.heroTitle}>Updated guidance</Text>
+          <Text style={styles.heroEyebrow}>Support center</Text>
+          <Text style={styles.heroTitle}>Help aligned with the current app</Text>
           <Text style={styles.heroText}>
-            Help is kept aligned with the current app so the language and steps match the real buttons you see on screen.
+            This section reflects the current product flows for contacts, shared records, and notifications
+            so the guidance matches what you see on screen today.
           </Text>
         </Card>
 
         <Card style={styles.menuCard}>
-          {items.map((item, index) => (
+          {QUICK_GUIDES.map((item, index) => (
             <TouchableOpacity
               key={item.label}
-              style={[styles.item, index === items.length - 1 && styles.lastItem]}
-              onPress={item.onPress}
+              style={[styles.item, index === QUICK_GUIDES.length - 1 && styles.lastItem]}
+              onPress={() => router.push(item.path as never)}
             >
               <RNView style={styles.itemLeft}>
                 <RNView style={styles.iconCircle}>
@@ -123,7 +132,8 @@ export default function HelpSupportScreen() {
         <Card style={styles.contactCard}>
           <Text style={styles.contactTitle}>Contact support</Text>
           <Text style={styles.contactText}>
-            Send a message from inside the app. This creates a support communication record that admins can review.
+            Use this form to report account issues, record mismatches, confirmation problems, or general product
+            questions. The message is stored in-app for administrator follow-up.
           </Text>
           <TextInput
             value={subject}
@@ -135,7 +145,7 @@ export default function HelpSupportScreen() {
           <TextInput
             value={message}
             onChangeText={setMessage}
-            placeholder="Describe the issue or question..."
+            placeholder="Describe what happened, what account or contact was involved, and what you expected..."
             placeholderTextColor="#94A3B8"
             style={[styles.input, styles.textarea]}
             multiline
@@ -146,7 +156,7 @@ export default function HelpSupportScreen() {
           </TouchableOpacity>
         </Card>
 
-        <Text style={styles.footer}>Buddy Balance v1.0.0</Text>
+        <AppLegalFooter style={styles.footer} />
       </ScrollView>
     </Screen>
   );
@@ -164,20 +174,28 @@ const styles = StyleSheet.create({
   heroCard: {
     padding: 20,
     marginBottom: 16,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EEF2FF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#C7D2FE',
+  },
+  heroEyebrow: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#6366F1',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 6,
   },
   heroTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#1E1B4B',
     marginBottom: 8,
   },
   heroText: {
     fontSize: 14,
     lineHeight: 21,
-    color: '#475569',
+    color: '#4338CA',
   },
   menuCard: {
     padding: 0,
@@ -258,20 +276,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   label: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#0F172A',
+    marginBottom: 3,
   },
   subLabel: {
     fontSize: 12,
+    lineHeight: 18,
     color: '#64748B',
-    marginTop: 2,
   },
   footer: {
-    textAlign: 'center',
-    marginTop: 18,
-    color: '#94A3B8',
     fontSize: 12,
-    fontWeight: '600',
+    textAlign: 'center',
+    color: '#94A3B8',
+    marginTop: 18,
   },
 });

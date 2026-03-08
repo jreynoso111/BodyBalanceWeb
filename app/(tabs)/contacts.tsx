@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, FlatList, TouchableOpacity, View as RNView, TextInput, useWindowDimensions, Modal, ScrollView, RefreshControl } from 'react-native';
 import { Text, View, Screen, Card } from '@/components/Themed';
+import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
-import { UserPlus, Search, ChevronDown, ChevronUp, X, Link2 } from 'lucide-react-native';
+import { UserPlus, Search, ChevronDown, ChevronUp, X, Link2, Plus } from 'lucide-react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCurrencySymbol } from '@/constants/Currencies';
@@ -323,12 +324,28 @@ export default function ContactsScreen() {
                 <Card style={styles.expandedCard}>
                   <RNView style={styles.expandedHeaderRow}>
                     <Text style={styles.expandedSectionTitle}>Contact snapshot</Text>
-                    <TouchableOpacity
-                      style={styles.inlineLinkButton}
-                      onPress={() => router.push({ pathname: '/new-contact', params: { id: item.id } })}
-                    >
-                      <Text style={styles.inlineLinkText}>Edit contact</Text>
-                    </TouchableOpacity>
+                    <RNView style={styles.inlineActionsRow}>
+                      <TouchableOpacity
+                        style={styles.inlineActionButton}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/new-loan',
+                            params: {
+                              contactId: item.id,
+                            },
+                          })
+                        }
+                      >
+                        <Plus size={14} color="#FFFFFF" />
+                        <Text style={styles.inlineActionButtonText}>Add record</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.inlineLinkButton}
+                        onPress={() => router.push({ pathname: '/new-contact', params: { id: item.id } })}
+                      >
+                        <Text style={styles.inlineLinkText}>Edit contact</Text>
+                      </TouchableOpacity>
+                    </RNView>
                   </RNView>
 
                   {compactDetails.length > 0 ? (
@@ -503,7 +520,7 @@ export default function ContactsScreen() {
             </RNView>
           );
         }}
-        ListFooterComponent={<Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>}
+        ListFooterComponent={<AppLegalFooter style={styles.copyright} />}
       />
 
       <TouchableOpacity
@@ -862,6 +879,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 999,
     backgroundColor: '#EEF2FF',
+  },
+  inlineActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  inlineActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: '#0F172A',
+  },
+  inlineActionButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   inlineLinkText: {
     fontSize: 12,

@@ -10,6 +10,7 @@ import { DEFAULT_USER_PREFERENCES, getOrCreateUserPreferences } from '@/services
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getProfileAvatarPublicUrl, isMissingAvatarUrlColumn } from '@/services/profileAvatar';
 import { getPlanLabel, normalizePlanTier } from '@/services/subscriptionPlan';
+import { getDeviceLanguage } from '@/constants/i18n';
 
 const LAST_PROTECTED_PATH_KEY = 'last_protected_path';
 
@@ -94,7 +95,7 @@ export default function SettingsScreen() {
             setUser(null);
             setRole(null);
             setPlanTier('free');
-            setLanguage('en');
+            setLanguage(getDeviceLanguage());
             router.replace('/');
         } catch (error: any) {
             try {
@@ -103,7 +104,7 @@ export default function SettingsScreen() {
                 setUser(null);
                 setRole(null);
                 setPlanTier('free');
-                setLanguage('en');
+                setLanguage(getDeviceLanguage());
                 router.replace('/');
             } catch {
                 Alert.alert('Error', error?.message || 'Could not sign out right now.');
