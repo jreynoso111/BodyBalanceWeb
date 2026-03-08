@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, Text, Alert, KeyboardAvoidingView, Platform, ScrollView, RefreshControl } from 'react-native';
+import { StyleSheet, View, TextInput, TouchableOpacity, Text, Alert, KeyboardAvoidingView, Platform, ScrollView, RefreshControl, Modal, Pressable } from 'react-native';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -23,6 +23,7 @@ export default function NewContactScreen() {
     const [socialNetwork, setSocialNetwork] = useState('');
     const [existingTargetUserId, setExistingTargetUserId] = useState<string | null>(null);
     const [existingLinkStatus, setExistingLinkStatus] = useState<'private' | 'pending' | 'accepted'>('private');
+    const [inviteSentVisible, setInviteSentVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const scrollViewRef = useRef<ScrollView | null>(null);
@@ -40,6 +41,10 @@ export default function NewContactScreen() {
         }
 
         router.back();
+    };
+
+    const showInviteSentConfirmation = () => {
+        setInviteSentVisible(true);
     };
 
     const normalizeLinkStatus = (value?: string | null): 'private' | 'pending' | 'accepted' => {
@@ -245,43 +250,6 @@ export default function NewContactScreen() {
             }
         }
 
-        // Detect duplicate contact by email or phone
-        if (email.trim() || phone.trim()) {
-            const orConditions = [];
-            if (email.trim()) orConditions.push(`email.ilike.${email.trim()}`);
-            if (phone.trim()) orConditions.push(`phone.eq.${phone.trim()}`);
-
-            if (orConditions.length > 0) {
-                const { data: duplicates } = await supabase
-                    .from('contacts')
-                    .select('id')
-                    .eq('user_id', user.id)
-                    .is('deleted_at', null)
-                    .or(orConditions.join(','));
-
-                if (duplicates && duplicates.length > 0) {
-                    const isDuplicate = duplicates.some((d: any) => d.id !== contactId);
-                    if (isDuplicate) {
-                        Alert.alert('Duplicate Contact', 'You already have a contact saved with this exact email or phone number.');
-                        setLoading(false);
-                        return;
-                    }
-                }
-            }
-        }
-
-        if (!normalizedFriendCode && (email.trim() || phone.trim())) {
-            const { data, error: lookupError } = await supabase.rpc('find_profile_match', {
-                p_email: email.trim() || null,
-                p_phone: phone.trim() || null,
-            });
-            if (lookupError) {
-                relationLookupWarning = getRelationLookupWarning(lookupError.message);
-            } else if (data) {
-                targetUserId = data;
-            }
-        }
-
         if (targetUserId === user.id) {
             Alert.alert('Error', "You can't add yourself.");
             setLoading(false);
@@ -382,13 +350,13 @@ export default function NewContactScreen() {
                     setLoading(false);
                     return;
                 }
-                Alert.alert(
-                    relationLookupWarning ? 'Saved with warning' : (targetUserId && nextLinkStatus === 'pending' ? 'Invitation sent' : 'Success'),
-                    relationLookupWarning || (targetUserId && nextLinkStatus === 'pending'
-                        ? 'Friend request sent successfully. Once they accept, both accounts will stay connected and shared records will sync automatically.'
-                        : 'Contact updated successfully'),
-                    [{ text: 'OK', onPress: navigateAfterSave }]
-                );
+                if (relationLookupWarning) {
+                    Alert.alert('Saved with warning', relationLookupWarning, [{ text: 'OK', onPress: navigateAfterSave }]);
+                } else if (targetUserId && nextLinkStatus === 'pending') {
+                    showInviteSentConfirmation();
+                } else {
+                    Alert.alert('Success', 'Contact updated successfully', [{ text: 'OK', onPress: navigateAfterSave }]);
+                }
             }
         } else {
             const { data: insertedContact, error } = await supabase.from('contacts').insert([
@@ -425,13 +393,13 @@ export default function NewContactScreen() {
                     setLoading(false);
                     return;
                 }
-                Alert.alert(
-                    relationLookupWarning ? 'Saved with warning' : (targetUserId && nextLinkStatus === 'pending' ? 'Invitation sent' : 'Success'),
-                    relationLookupWarning || (targetUserId && nextLinkStatus === 'pending'
-                        ? 'Friend request sent successfully. Once they accept, both accounts will stay connected and shared records will sync automatically.'
-                        : 'Contact created successfully'),
-                    [{ text: 'OK', onPress: navigateAfterSave }]
-                );
+                if (relationLookupWarning) {
+                    Alert.alert('Saved with warning', relationLookupWarning, [{ text: 'OK', onPress: navigateAfterSave }]);
+                } else if (targetUserId && nextLinkStatus === 'pending') {
+                    showInviteSentConfirmation();
+                } else {
+                    Alert.alert('Success', 'Contact created successfully', [{ text: 'OK', onPress: navigateAfterSave }]);
+                }
             }
         }
 
@@ -646,6 +614,44 @@ export default function NewContactScreen() {
 
                 <Text style={styles.copyright}>© 2026 I GOT YOU</Text>
             </ScrollView>
+
+            <Modal
+                visible={inviteSentVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => {
+                    setInviteSentVisible(false);
+                    navigateAfterSave();
+                }}
+            >
+                <Pressable
+                    style={styles.successModalBackdrop}
+                    onPress={() => {
+                        setInviteSentVisible(false);
+                        navigateAfterSave();
+                    }}
+                >
+                    <Pressable style={styles.successModalCard} onPress={(event) => event.stopPropagation()}>
+                        <View style={styles.successIconWrap}>
+                            <Check size={28} color="#166534" />
+                        </View>
+                        <Text style={styles.successEyebrow}>Invitation sent</Text>
+                        <Text style={styles.successTitle}>Your friend invite is on its way</Text>
+                        <Text style={styles.successText}>
+                            They will get your request, and once they accept it both accounts will stay connected for shared records and confirmations.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.successButton}
+                            onPress={() => {
+                                setInviteSentVisible(false);
+                                navigateAfterSave();
+                            }}
+                        >
+                            <Text style={styles.successButtonText}>Perfect</Text>
+                        </TouchableOpacity>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
@@ -733,5 +739,64 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
         marginTop: 32,
+    },
+    successModalBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    successModalCard: {
+        borderRadius: 28,
+        padding: 24,
+        backgroundColor: '#FFFBEB',
+        borderWidth: 1,
+        borderColor: '#FDE68A',
+        shadowColor: '#000',
+        shadowOpacity: 0.12,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 8,
+    },
+    successIconWrap: {
+        width: 60,
+        height: 60,
+        borderRadius: 999,
+        backgroundColor: '#DCFCE7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    successEyebrow: {
+        fontSize: 12,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        color: '#B45309',
+        marginBottom: 8,
+    },
+    successTitle: {
+        fontSize: 24,
+        lineHeight: 28,
+        fontWeight: '800',
+        color: '#111827',
+    },
+    successText: {
+        marginTop: 10,
+        fontSize: 15,
+        lineHeight: 22,
+        color: '#4B5563',
+    },
+    successButton: {
+        marginTop: 22,
+        borderRadius: 16,
+        backgroundColor: '#16A34A',
+        paddingVertical: 16,
+        alignItems: 'center',
+    },
+    successButtonText: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: '800',
     },
 });
