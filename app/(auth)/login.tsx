@@ -255,7 +255,7 @@ export default function LoginScreen() {
                         ) : null}
                     </Card>
 
-                    <Text style={styles.copyright}>© 2026 I GOT YOU</Text>
+                    <Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
                 </RNView>
             </KeyboardAvoidingView>
         </Screen>

@@ -619,7 +619,7 @@ export default function NewContactScreen() {
                     </TouchableOpacity>
                 )}
 
-                <Text style={styles.copyright}>© 2026 I GOT YOU</Text>
+                <Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
             </ScrollView>
 
             <Modal

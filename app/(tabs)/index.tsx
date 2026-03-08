@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, View as RNView, RefreshControl, Share, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text, View, Screen, Card } from '@/components/Themed';
 import { supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -322,6 +323,7 @@ export default function DashboardScreen() {
   };
 
   const balance = summary.lent - summary.borrowed;
+  const balanceTone = getBalanceTone(summary.lent, summary.borrowed);
 
   return (
     <Screen style={styles.container} safeAreaEdges={['left', 'right', 'bottom']}>
@@ -363,69 +365,76 @@ export default function DashboardScreen() {
           </RNView>
         </RNView>
 
-        <Card style={styles.balanceCard}>
-          <RNView style={styles.balanceCardHeader}>
-            <View>
-              <Text style={styles.balanceLabel}>Open balance</Text>
-              <Text style={styles.balanceValue}>{formatSignedCurrency(balance)}</Text>
-            </View>
-            <RNView style={[styles.netBadge, balance >= 0 ? styles.netBadgePositive : styles.netBadgeNegative]}>
-              <Text style={[styles.netBadgeText, balance >= 0 ? styles.netBadgeTextPositive : styles.netBadgeTextNegative]}>
-                {balance >= 0 ? 'You lent more' : 'You borrowed more'}
-              </Text>
+        <Card style={[styles.balanceCard, { borderColor: balanceTone.border }]}>
+          <LinearGradient
+            colors={balanceTone.gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.balanceGradient}
+          >
+            <RNView style={styles.balanceCardHeader}>
+              <RNView style={styles.balanceHeadlineBlock}>
+                <Text style={styles.balanceLabel}>Open balance</Text>
+                <Text style={styles.balanceValue}>{formatSignedCurrency(balance)}</Text>
+              </RNView>
+              <RNView style={[styles.netBadge, balance >= 0 ? styles.netBadgePositive : styles.netBadgeNegative]}>
+                <Text style={[styles.netBadgeText, balance >= 0 ? styles.netBadgeTextPositive : styles.netBadgeTextNegative]}>
+                  {balance >= 0 ? 'You lent more' : 'You borrowed more'}
+                </Text>
+              </RNView>
             </RNView>
-          </RNView>
-          <Text style={styles.balanceHint}>
-            {balance >= 0 ? 'Right now, friends owe you more than you owe them.' : 'Right now, you owe more than friends owe you.'}
-          </Text>
+            <Text style={styles.balanceHint}>
+              {balance >= 0 ? 'Right now, friends owe you more than you owe them.' : 'Right now, you owe more than friends owe you.'}
+            </Text>
 
-          <RNView style={styles.balanceBreakdownRow}>
-            <RNView style={styles.balanceBreakdownCard}>
-              <RNView style={[styles.statIcon, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-                <ArrowUpRight size={18} color="#10B981" />
+            <RNView style={styles.balanceBreakdownRow}>
+              <RNView style={styles.balanceBreakdownCard}>
+                <RNView style={[styles.statIcon, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                  <ArrowUpRight size={18} color="#10B981" />
+                </RNView>
+                <Text style={styles.breakdownLabel}>They owe you</Text>
+                <Text style={[styles.breakdownValue, { color: '#047857' }]}>{formatCurrency(summary.lent)}</Text>
               </RNView>
-              <Text style={styles.breakdownLabel}>They owe you</Text>
-              <Text style={[styles.breakdownValue, { color: '#047857' }]}>{formatCurrency(summary.lent)}</Text>
-            </RNView>
-            <RNView style={styles.balanceBreakdownCard}>
-              <RNView style={[styles.statIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
-                <ArrowDownLeft size={18} color="#EF4444" />
+              <RNView style={styles.balanceBreakdownCard}>
+                <RNView style={[styles.statIcon, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+                  <ArrowDownLeft size={18} color="#EF4444" />
+                </RNView>
+                <Text style={styles.breakdownLabel}>You owe</Text>
+                <Text style={[styles.breakdownValue, { color: '#B91C1C' }]}>{formatCurrency(summary.borrowed)}</Text>
               </RNView>
-              <Text style={styles.breakdownLabel}>You owe</Text>
-              <Text style={[styles.breakdownValue, { color: '#B91C1C' }]}>{formatCurrency(summary.borrowed)}</Text>
             </RNView>
-          </RNView>
 
-          <View style={styles.distributionSection}>
-            <RNView style={styles.distributionLabels}>
-              <Text style={styles.distributionTitle}>Balance mix</Text>
-              <Text style={styles.distributionPercent}>{getCollectShare(summary.lent, summary.borrowed)}% owed to you</Text>
-            </RNView>
-            <RNView style={styles.distributionBar}>
-              <RNView
-                style={[
-                  styles.distributionCollect,
-                  { flex: Math.max(summary.lent, 0.0001) },
-                ]}
-              />
-              <RNView
-                style={[
-                  styles.distributionPay,
-                  { flex: Math.max(summary.borrowed, 0.0001) },
-                ]}
-              />
-            </RNView>
-            <RNView style={styles.distributionLegend}>
-              <RNView style={styles.legendItem}>
-                <RNView style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
-                <Text style={styles.legendText}>{getCollectShare(summary.lent, summary.borrowed)}% owed to you</Text>
+            <RNView style={styles.distributionSection}>
+              <RNView style={styles.distributionLabels}>
+                <Text style={styles.distributionTitle}>Balance mix</Text>
+                <Text style={styles.distributionPercent}>{getCollectShare(summary.lent, summary.borrowed)}% owed to you</Text>
               </RNView>
-              <RNView style={styles.legendItem}>
-                <RNView style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-                <Text style={styles.legendText}>{100 - getCollectShare(summary.lent, summary.borrowed)}% you owe</Text>
+              <RNView style={styles.distributionBar}>
+                <RNView
+                  style={[
+                    styles.distributionCollect,
+                    { flex: Math.max(summary.lent, 0.0001) },
+                  ]}
+                />
+                <RNView
+                  style={[
+                    styles.distributionPay,
+                    { flex: Math.max(summary.borrowed, 0.0001) },
+                  ]}
+                />
+              </RNView>
+              <RNView style={styles.distributionLegend}>
+                <RNView style={styles.legendItem}>
+                  <RNView style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+                  <Text style={styles.legendText}>{getCollectShare(summary.lent, summary.borrowed)}% owed to you</Text>
+                </RNView>
+                <RNView style={styles.legendItem}>
+                  <RNView style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+                  <Text style={styles.legendText}>{100 - getCollectShare(summary.lent, summary.borrowed)}% you owe</Text>
+                </RNView>
               </RNView>
             </RNView>
-          </View>
+          </LinearGradient>
         </Card>
 
         <View style={styles.section}>
@@ -632,6 +641,55 @@ function getCollectShare(lent: number, borrowed: number) {
   return Math.round((lent / total) * 100);
 }
 
+function getBalanceTone(lent: number, borrowed: number) {
+  const total = lent + borrowed;
+  const score = total <= 0 ? 0 : (lent - borrowed) / total;
+
+  if (score >= 0) {
+    const intensity = Math.min(score, 1);
+    return {
+      gradient: [
+        mixHex('#FFFFFF', '#DCFCE7', 0.35 + intensity * 0.4),
+        mixHex('#F8FAFC', '#86EFAC', 0.2 + intensity * 0.5),
+      ] as [string, string],
+      border: mixHex('#E2E8F0', '#22C55E', 0.25 + intensity * 0.45),
+    };
+  }
+
+  const intensity = Math.min(Math.abs(score), 1);
+  return {
+    gradient: [
+      mixHex('#FFFFFF', '#FEE2E2', 0.35 + intensity * 0.4),
+      mixHex('#F8FAFC', '#FCA5A5', 0.2 + intensity * 0.5),
+    ] as [string, string],
+    border: mixHex('#E2E8F0', '#EF4444', 0.25 + intensity * 0.45),
+  };
+}
+
+function mixHex(from: string, to: string, amount: number) {
+  const clamped = Math.max(0, Math.min(amount, 1));
+  const fromRgb = hexToRgb(from);
+  const toRgb = hexToRgb(to);
+  const mixed = fromRgb.map((value, index) =>
+    Math.round(value + (toRgb[index] - value) * clamped)
+  );
+
+  return `#${mixed.map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function hexToRgb(hex: string) {
+  const normalized = hex.replace('#', '');
+  const safeHex = normalized.length === 3
+    ? normalized.split('').map((value) => `${value}${value}`).join('')
+    : normalized;
+
+  return [
+    Number.parseInt(safeHex.slice(0, 2), 16),
+    Number.parseInt(safeHex.slice(2, 4), 16),
+    Number.parseInt(safeHex.slice(4, 6), 16),
+  ];
+}
+
 function getDueDescriptor(dueDate: string | null) {
   if (!dueDate) return 'No due date';
   const due = new Date(`${dueDate}T12:00:00`);
@@ -830,11 +888,14 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   balanceCard: {
-    padding: 22,
+    padding: 0,
     marginBottom: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  balanceGradient: {
+    padding: 22,
   },
   inviteCard: {
     padding: 20,
@@ -858,8 +919,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: 'transparent',
   },
+  balanceHeadlineBlock: {
+    backgroundColor: 'transparent',
+  },
   balanceLabel: {
-    color: '#64748B',
+    color: '#475569',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1,
@@ -872,7 +936,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   balanceHint: {
-    color: '#64748B',
+    color: '#475569',
     fontSize: 14,
     lineHeight: 20,
     marginTop: 6,
@@ -882,12 +946,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
+    borderWidth: 1,
   },
   netBadgePositive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.42)',
+    borderColor: 'rgba(16, 185, 129, 0.16)',
   },
   netBadgeNegative: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.42)',
+    borderColor: 'rgba(239, 68, 68, 0.16)',
   },
   netBadgeText: {
     fontSize: 12,
@@ -910,9 +977,9 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255, 255, 255, 0.46)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(255, 255, 255, 0.52)',
   },
   statIcon: {
     width: 34,
@@ -923,7 +990,7 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#475569',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -948,21 +1015,21 @@ const styles = StyleSheet.create({
   distributionTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#475569',
+    color: '#334155',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   distributionPercent: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
   },
   distributionBar: {
     flexDirection: 'row',
     height: 12,
     borderRadius: 999,
     overflow: 'hidden',
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
   },
   distributionCollect: {
     backgroundColor: '#10B981',
@@ -991,7 +1058,7 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
   },
   fabHint: {
     position: 'absolute',

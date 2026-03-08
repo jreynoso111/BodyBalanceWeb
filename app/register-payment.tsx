@@ -691,7 +691,7 @@ export default function RegisterPaymentScreen() {
                         </TouchableOpacity>
                     )}
 
-                    <Text style={styles.copyright}>© 2026 I GOT YOU</Text>
+                    <Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
                 </View>
             </KeyboardAvoidingView>
         </Screen>

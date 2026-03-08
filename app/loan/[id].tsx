@@ -4,11 +4,12 @@ import { Text, View, Screen, Card } from '@/components/Themed';
 import { useLocalSearchParams, useNavigation, useRouter, Stack, useFocusEffect } from 'expo-router';
 import { CommonActions } from '@react-navigation/native';
 import { supabase } from '@/services/supabase';
-import { ArrowLeft, Wallet, Calendar, Plus, Clock, FileText, Trash2, Edit, Box, ChevronRight, TrendingUp, TrendingDown, Zap, Activity, ShieldCheck, ShieldAlert, Shield, Bell, History, MoreHorizontal, Info, X } from 'lucide-react-native';
+import { ArrowLeft, Wallet, Calendar, Plus, Clock, FileText, Trash2, Edit, Box, ChevronRight, TrendingUp, TrendingDown, Zap, Activity, ShieldCheck, ShieldAlert, Shield, Bell, History, MoreHorizontal, Info, Share2, X } from 'lucide-react-native';
 import { useAuthStore } from '@/store/authStore';
 import { CURRENCIES, getCurrencySymbol } from '@/constants/Currencies';
 import { getOrCreateUserPreferences, sanitizePreferredCurrencies, updateUserPreferences } from '@/services/userPreferences';
 import { cancelLoanReminders, upsertLoanReminderForUser } from '@/services/notificationService';
+import { shareLoanAsPdf } from '@/services/exportService';
 
 const isMissingRequestPayloadColumn = (message?: string) =>
     String(message || '').toLowerCase().includes('request_payload');
@@ -18,7 +19,7 @@ export default function LoanDetailScreen() {
     const loanId = Array.isArray(id) ? id[0] : id;
     const router = useRouter();
     const navigation = useNavigation();
-    const { user } = useAuthStore();
+    const { user, planTier } = useAuthStore();
     const [loan, setLoan] = useState<any>(null);
     const [payments, setPayments] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -42,6 +43,7 @@ export default function LoanDetailScreen() {
     const [adjustmentModalVisible, setAdjustmentModalVisible] = useState(false);
     const [adjustedTotal, setAdjustedTotal] = useState('');
     const [savingAdjustedTotal, setSavingAdjustedTotal] = useState(false);
+    const [sharingPdf, setSharingPdf] = useState(false);
 
     useFocusEffect(
         React.useCallback(() => {
@@ -587,6 +589,61 @@ export default function LoanDetailScreen() {
         }
     };
 
+    const handleSharePdf = async () => {
+        if (planTier !== 'premium') {
+            Alert.alert('Premium feature', 'PDF sharing is available only for Premium accounts.');
+            return;
+        }
+
+        if (!loan?.id) {
+            Alert.alert('Error', 'Record not found');
+            return;
+        }
+
+        setSharingPdf(true);
+
+        try {
+            const paymentIds = payments.map((payment) => payment.id).filter(Boolean);
+            const paymentHistoryByPaymentId: Record<string, any[]> = {};
+
+            if (paymentIds.length > 0) {
+                const { data: paymentHistoryData, error: paymentHistoryError } = await supabase
+                    .from('payment_history')
+                    .select('*')
+                    .in('payment_id', paymentIds)
+                    .order('created_at', { ascending: false });
+
+                if (paymentHistoryError) {
+                    console.error('payment history export load failed:', paymentHistoryError.message);
+                } else {
+                    (paymentHistoryData || []).forEach((entry) => {
+                        const current = paymentHistoryByPaymentId[entry.payment_id] || [];
+                        current.push(entry);
+                        paymentHistoryByPaymentId[entry.payment_id] = current;
+                    });
+                }
+            }
+
+            await shareLoanAsPdf({
+                loan,
+                payments,
+                paymentHistoryByPaymentId,
+                summary: {
+                    remaining,
+                    totalPaid,
+                    safeLoanAmount,
+                    timeProgress,
+                    paymentProgress: paymentProgressClamped,
+                    avgPayment,
+                    daysSinceLastPayment,
+                    health,
+                },
+            });
+        } finally {
+            setSharingPdf(false);
+        }
+    };
+
     if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#000" /></View>;
 
     const loanAmountValue = Number(loan.amount);
@@ -637,9 +694,16 @@ export default function LoanDetailScreen() {
                         </TouchableOpacity>
                     ),
                     headerRight: () => (
-                        <TouchableOpacity onPress={handleDelete} style={styles.deleteHeader}>
-                            <Trash2 size={20} color="#EF4444" />
-                        </TouchableOpacity>
+                        <RNView style={styles.headerActions}>
+                            {planTier === 'premium' ? (
+                                <TouchableOpacity onPress={() => void handleSharePdf()} style={styles.shareHeader} disabled={sharingPdf}>
+                                    {sharingPdf ? <ActivityIndicator size="small" color="#4F46E5" /> : <Share2 size={20} color="#4F46E5" />}
+                                </TouchableOpacity>
+                            ) : null}
+                            <TouchableOpacity onPress={handleDelete} style={styles.deleteHeader}>
+                                <Trash2 size={20} color="#EF4444" />
+                            </TouchableOpacity>
+                        </RNView>
                     )
                 }}
             />
@@ -967,7 +1031,7 @@ export default function LoanDetailScreen() {
                     </RNView>
                 </RNView>
 
-                <Text style={styles.copyright}>© 2026 I GOT YOU</Text>
+                <Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
             </ScrollView>
 
             <Modal
@@ -1250,6 +1314,20 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(239, 68, 68, 0.05)',
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    shareHeader: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: 'transparent',
     },
     closeHeaderBtn: {
         width: 36,

@@ -549,35 +549,39 @@ export default function ProfileScreen() {
               </RNView>
             ) : null}
 
-            <Text style={styles.label}>Redeem Someone Else's Invite Code</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ABC123"
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="characters"
-              value={inviteCodeInput}
-              onChangeText={(value) => setInviteCodeInput(value.toUpperCase())}
-              editable={!inviteSummary?.referredByUserId && !applyingInviteCode}
-            />
-            <Text style={styles.inviteRedeemHint}>
-              {inviteSummary?.referredByUserId
-                ? `You already redeemed invite code ${inviteSummary.referredByCode || inviteCodeInput}.`
-                : 'You can redeem one invite code per account.'}
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.redeemButton,
-                (applyingInviteCode || Boolean(inviteSummary?.referredByUserId)) && styles.redeemButtonDisabled,
-              ]}
-              onPress={() => {
-                void handleApplyInviteCode();
-              }}
-              disabled={applyingInviteCode || Boolean(inviteSummary?.referredByUserId)}
-            >
-              <Text style={styles.redeemButtonText}>
-                {applyingInviteCode ? 'Applying...' : 'Apply Invite Code'}
-              </Text>
-            </TouchableOpacity>
+            {planTier !== 'premium' ? (
+              <>
+                <Text style={styles.label}>Redeem Someone Else's Invite Code</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="ABC123"
+                  placeholderTextColor="#94A3B8"
+                  autoCapitalize="characters"
+                  value={inviteCodeInput}
+                  onChangeText={(value) => setInviteCodeInput(value.toUpperCase())}
+                  editable={!inviteSummary?.referredByUserId && !applyingInviteCode}
+                />
+                <Text style={styles.inviteRedeemHint}>
+                  {inviteSummary?.referredByUserId
+                    ? `You already redeemed invite code ${inviteSummary.referredByCode || inviteCodeInput}.`
+                    : 'Invite codes only work on new accounts and can be redeemed once per account.'}
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.redeemButton,
+                    (applyingInviteCode || Boolean(inviteSummary?.referredByUserId)) && styles.redeemButtonDisabled,
+                  ]}
+                  onPress={() => {
+                    void handleApplyInviteCode();
+                  }}
+                  disabled={applyingInviteCode || Boolean(inviteSummary?.referredByUserId)}
+                >
+                  <Text style={styles.redeemButtonText}>
+                    {applyingInviteCode ? 'Applying...' : 'Apply Invite Code'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
           </RNView>
 
           <Text style={styles.label}>Default Currency</Text>

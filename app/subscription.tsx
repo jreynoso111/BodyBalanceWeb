@@ -8,7 +8,6 @@ import {
   getBillingUnavailableReason,
   isBillingAvailable,
   purchasePremiumPackage,
-  restorePremiumAccess,
 } from '@/services/billing';
 import { PLAN_LIMITS } from '@/services/subscriptionPlan';
 import { formatReferralExpiry, getMyInviteSummary, InviteSummary } from '@/services/referrals';
@@ -20,7 +19,6 @@ export default function SubscriptionScreen() {
   const planTitle = planTier === 'premium' ? 'Premium active' : 'Free plan';
   const unavailableReason = getBillingUnavailableReason();
   const [purchasePending, setPurchasePending] = React.useState(false);
-  const [restorePending, setRestorePending] = React.useState(false);
   const [inviteEmail, setInviteEmail] = React.useState('');
   const [sendingInvite, setSendingInvite] = React.useState(false);
   const [referralSummary, setReferralSummary] = React.useState<InviteSummary | null>(null);
@@ -52,23 +50,6 @@ export default function SubscriptionScreen() {
       Alert.alert('Purchase unavailable', error?.message || 'Premium checkout is not available right now.');
     } finally {
       setPurchasePending(false);
-    }
-  };
-
-  const handleRestore = async () => {
-    if (restorePending) return;
-    setRestorePending(true);
-
-    try {
-      const result = await restorePremiumAccess();
-      if (result.synced && result.planTier === 'premium') {
-        Alert.alert('Premium restored', 'Your Premium membership was restored.');
-        return;
-      }
-
-      Alert.alert('Restore unavailable', result.error || 'No Premium purchase could be restored right now.');
-    } finally {
-      setRestorePending(false);
     }
   };
 
@@ -144,15 +125,6 @@ export default function SubscriptionScreen() {
                 disabled={purchasePending}
               >
                 {purchasePending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>Buy Premium</Text>}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                style={[styles.secondaryButton, restorePending && styles.buttonDisabled]}
-                onPress={() => void handleRestore()}
-                disabled={restorePending}
-              >
-                {restorePending ? <ActivityIndicator size="small" color="#4F46E5" /> : <Text style={styles.secondaryButtonText}>Restore purchase</Text>}
               </TouchableOpacity>
 
               {isBillingAvailable() ? (

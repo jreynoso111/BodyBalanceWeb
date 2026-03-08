@@ -503,7 +503,7 @@ export default function ContactsScreen() {
             </RNView>
           );
         }}
-        ListFooterComponent={<Text style={styles.copyright}>© 2026 I GOT YOU</Text>}
+        ListFooterComponent={<Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>}
       />
 
       <TouchableOpacity

@@ -57,7 +57,7 @@ export default function LandingPage() {
                 </View>
 
                 <View style={styles.footer}>
-                    <Text style={styles.footerText}>© 2026 I GOT YOU</Text>
+                    <Text style={styles.footerText}>© 2026 Buddy Balance, The Anomaly Solutions</Text>
                 </View>
             </SafeAreaView>
         </AnimatedBackground>

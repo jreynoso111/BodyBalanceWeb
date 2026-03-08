@@ -363,7 +363,7 @@ export default function RequestsScreen() {
                         <Text style={styles.emptyDesc}>When someone shares or updates a record with you, it will show up here.</Text>
                     </View>
                 }
-                ListFooterComponent={<Text style={styles.copyright}>© 2026 I GOT YOU</Text>}
+                ListFooterComponent={<Text style={styles.copyright}>© 2026 Buddy Balance, The Anomaly Solutions</Text>}
             />
         </Screen>
     );
