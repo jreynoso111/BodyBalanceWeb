@@ -99,7 +99,7 @@ export function WebAccountLayout({
                 const active = matchesPath(pathname, item.matches);
                 return (
                   <Link key={item.label} href={item.href} asChild>
-                    <Pressable style={[styles.navLink, active && styles.navLinkActive]}>
+                    <Pressable style={StyleSheet.flatten([styles.navLink, active && styles.navLinkActive])}>
                       <Text style={[styles.navText, active && styles.navTextActive]}>{item.label}</Text>
                     </Pressable>
                   </Link>

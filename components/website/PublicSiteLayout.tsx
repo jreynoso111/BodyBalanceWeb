@@ -107,7 +107,13 @@ export function PublicSiteLayout({
               const active = isActivePath(pathname, item.matches);
               return (
                 <Link key={item.label} href={item.href} asChild>
-                  <Pressable style={[styles.navLink, mobile && styles.navLinkMobile, active ? styles.navLinkActive : null]}>
+                  <Pressable
+                    style={StyleSheet.flatten([
+                      styles.navLink,
+                      mobile && styles.navLinkMobile,
+                      active ? styles.navLinkActive : null,
+                    ])}
+                  >
                     <Text style={[styles.navLabel, mobile && styles.navLabelMobile, active ? styles.navLabelActive : null]}>
                       {item.label}
                     </Text>
@@ -116,7 +122,12 @@ export function PublicSiteLayout({
               );
             })}
             <Link href={user ? '/settings' : '/(auth)/login'} asChild>
-              <Pressable style={[styles.accountLink, user && styles.accountLinkActive]}>
+              <Pressable
+                style={StyleSheet.flatten([
+                  styles.accountLink,
+                  user && styles.accountLinkActive,
+                ])}
+              >
                 <Text style={[styles.accountLabel, user && styles.accountLabelActive]}>
                   {user ? 'Account' : 'Sign in'}
                 </Text>
@@ -158,11 +169,11 @@ export function PublicSiteLayout({
                 {actions.map((action) => (
                   <Link key={`${action.href}:${action.label}`} href={action.href} asChild>
                     <Pressable
-                      style={[
+                      style={StyleSheet.flatten([
                         styles.actionButton,
                         mobile && styles.actionButtonMobile,
                         action.variant === 'secondary' ? styles.actionSecondary : styles.actionPrimary,
-                      ]}
+                      ])}
                     >
                       <Text
                         style={[
