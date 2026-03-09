@@ -2,7 +2,7 @@ import React from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
-import { PublicCard, PublicSiteLayout } from '@/components/website/PublicSiteLayout';
+import { PublicSiteLayout } from '@/components/website/PublicSiteLayout';
 
 const FAQ_ITEMS = [
   {
@@ -79,9 +79,12 @@ export default function FAQScreen() {
           { href: '/privacy', label: 'Privacy Policy', variant: 'secondary' },
         ]}
       >
-        <View style={styles.webStack}>
-          {FAQ_ITEMS.map((item) => (
-            <PublicCard key={item.question} title={item.question} description={item.answer} />
+        <View style={styles.webFaqList}>
+          {FAQ_ITEMS.map((item, index) => (
+            <View key={item.question} style={[styles.webFaqRow, index === 0 && styles.webFaqRowFirst]}>
+              <Text style={styles.webFaqQuestion}>{item.question}</Text>
+              <Text style={styles.webFaqAnswer}>{item.answer}</Text>
+            </View>
           ))}
         </View>
       </PublicSiteLayout>
@@ -142,8 +145,32 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 12,
   },
-  webStack: {
-    gap: 16,
+  webFaqList: {
+    borderRadius: 26,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
+  },
+  webFaqRow: {
+    padding: 22,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148,163,184,0.14)',
+  },
+  webFaqRowFirst: {
+    borderTopWidth: 0,
+  },
+  webFaqQuestion: {
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  webFaqAnswer: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 25,
+    color: '#475569',
   },
   question: {
     fontSize: 16,

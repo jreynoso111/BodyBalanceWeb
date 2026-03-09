@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View as RNView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   Bell,
   ChevronRight,
@@ -13,7 +14,7 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/services/supabase';
 import { AppLegalFooter } from '@/components/AppLegalFooter';
-import { PublicCard, PublicSiteLayout } from '@/components/website/PublicSiteLayout';
+import { PublicSiteLayout } from '@/components/website/PublicSiteLayout';
 
 type QuickGuideItem = {
   icon: React.ComponentType<{ size?: number; color?: string }>;
@@ -107,22 +108,31 @@ export default function HelpSupportScreen() {
           { href: '/terms', label: 'Read Terms', variant: 'secondary' },
         ]}
       >
-        <PublicCard
-          title="Account-specific support"
-          description={
-            user?.id
-              ? 'You are signed in, so you can send an in-app message below and it will be stored for administrator follow-up.'
-              : 'For account-specific issues, the current support workflow lives inside the authenticated app experience. Sign in to submit a tracked support message tied to your account.'
-          }
-        />
-        <PublicCard
-          title="What this site already covers"
-          description="The public website is the home for FAQ, privacy policy, terms of service, and launch information while Buddy Balance prepares for wider mobile release."
-        />
-        <PublicCard
-          title="Public email channel"
-          description="A domain-based support inbox will be added once the new mail setup is configured. Until then, authenticated users should use the in-app support flow so the request is attached to the correct account history."
-        />
+        <LinearGradient colors={['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.74)']} style={styles.webSupportPanel}>
+          <Text style={styles.webSupportLabel}>WHERE TO GO FOR WHAT</Text>
+          <RNView style={styles.webSupportGrid}>
+            <RNView style={styles.webSupportItem}>
+              <Text style={styles.webSupportTitle}>Quick answers</Text>
+              <Text style={styles.webSupportBody}>
+                Use FAQ if you want to understand how balances, records, contacts, notifications, or Premium work.
+              </Text>
+            </RNView>
+            <RNView style={styles.webSupportItem}>
+              <Text style={styles.webSupportTitle}>Account-specific help</Text>
+              <Text style={styles.webSupportBody}>
+                {user?.id
+                  ? 'You are signed in, so the in-app message form below is the right place to report issues tied to your account.'
+                  : 'If the issue is tied to an account, sign in and use the in-app support flow so the request stays attached to the right user history.'}
+              </Text>
+            </RNView>
+            <RNView style={styles.webSupportItem}>
+              <Text style={styles.webSupportTitle}>Policies and legal pages</Text>
+              <Text style={styles.webSupportBody}>
+                Privacy and Terms live on this public site so future store listings and support links point to one clean source.
+              </Text>
+            </RNView>
+          </RNView>
+        </LinearGradient>
 
         {user?.id ? (
           <Card style={styles.contactCard}>
@@ -264,6 +274,39 @@ const styles = StyleSheet.create({
   contactCard: {
     marginTop: 16,
     padding: 18,
+  },
+  webSupportPanel: {
+    padding: 22,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+  },
+  webSupportLabel: {
+    color: '#5B63FF',
+    fontFamily: 'SpaceMono',
+    fontSize: 11,
+    letterSpacing: 1.6,
+  },
+  webSupportGrid: {
+    marginTop: 16,
+    gap: 14,
+  },
+  webSupportItem: {
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148,163,184,0.18)',
+  },
+  webSupportTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  webSupportBody: {
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#475569',
   },
   contactTitle: {
     fontSize: 18,

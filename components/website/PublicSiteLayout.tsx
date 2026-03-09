@@ -203,12 +203,7 @@ export function PublicCard({
 }) {
   return (
     <LinearGradient colors={['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.7)']} style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardBadge}>
-          <Text style={styles.cardBadgeText}>BB</Text>
-        </View>
-        <Text style={styles.cardTitle}>{title}</Text>
-      </View>
+      <Text style={styles.cardTitle}>{title}</Text>
       {description ? <Text style={styles.cardDescription}>{description}</Text> : null}
       {children}
     </LinearGradient>
@@ -509,26 +504,7 @@ const styles = StyleSheet.create({
     shadowRadius: 26,
     elevation: 10,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  cardBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#EEF2FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardBadgeText: {
-    color: '#4F46E5',
-    fontFamily: 'SpaceMono',
-    fontSize: 11,
-  },
   cardTitle: {
-    flex: 1,
     fontSize: 22,
     lineHeight: 28,
     fontWeight: '900',
