@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, View as RNView } from 'react-native';
-import { Stack } from 'expo-router';
+import { Alert, ScrollView, StyleSheet, Switch, TextInput, TouchableOpacity, View as RNView, Platform } from 'react-native';
+import { Redirect, Stack } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
 import { useAuthStore } from '@/store/authStore';
 import { getPasswordPolicyMessage, isStrongPassword } from '@/services/passwordPolicy';
@@ -8,9 +8,10 @@ import { supabase } from '@/services/supabase';
 import { getOrCreateUserPreferences, updateUserPreferences } from '@/services/userPreferences';
 import { setCachedBiometricLockEnabled } from '@/services/appLock';
 import { getBiometricCapability, promptBiometricVerification } from '@/services/biometrics';
+import { WebAccountLayout } from '@/components/website/WebAccountLayout';
 
 export default function SecurityScreen() {
-  const { user } = useAuthStore();
+  const { user, initialized } = useAuthStore();
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricLabel, setBiometricLabel] = useState('biometrics');
   const [biometricSupported, setBiometricSupported] = useState(false);
@@ -213,6 +214,81 @@ export default function SecurityScreen() {
     Alert.alert('Success', 'Signed out from all sessions');
   };
 
+  if (Platform.OS === 'web') {
+    if (initialized && !user) {
+      return <Redirect href="/(auth)/login" />;
+    }
+
+    return (
+      <WebAccountLayout
+        eyebrow="Security"
+        title="Security controls for the same Buddy Balance account."
+        description="Change password, review biometric lock state, and sign out other sessions from a web-friendly account surface."
+      >
+        <Card style={styles.webSecurityCard}>
+          <RNView style={styles.row}>
+            <RNView style={styles.rowText}>
+              <Text style={styles.rowTitle}>Biometric Lock</Text>
+              <Text style={styles.rowSubtitle}>{biometricSubtitle}</Text>
+            </RNView>
+            <Switch
+              value={biometricEnabled}
+              onValueChange={onToggleBiometric}
+              disabled={biometricBusy}
+              trackColor={{ false: '#CBD5E1', true: '#6366F1' }}
+              thumbColor="#FFFFFF"
+            />
+          </RNView>
+
+          <TouchableOpacity
+            style={[styles.verifyButton, biometricBusy && styles.verifyButtonDisabled]}
+            onPress={onTestBiometric}
+            disabled={biometricBusy}
+          >
+            <Text style={styles.verifyButtonText}>{biometricBusy ? 'Checking...' : `Test ${biometricLabel}`}</Text>
+          </TouchableOpacity>
+        </Card>
+
+        <RNView style={styles.webSecurityGrid}>
+          <Card style={styles.webSecurityForm}>
+            <Text style={styles.sectionTitle}>Change Password</Text>
+            <TextInput
+              secureTextEntry
+              style={styles.input}
+              placeholder="New password"
+              placeholderTextColor="#94A3B8"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              autoCapitalize="none"
+            />
+            <TextInput
+              secureTextEntry
+              style={styles.input}
+              placeholder="Confirm new password"
+              placeholderTextColor="#94A3B8"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity style={styles.primaryButton} onPress={handlePasswordUpdate} disabled={savingPassword}>
+              <Text style={styles.primaryButtonText}>{savingPassword ? 'Updating...' : 'Update Password'}</Text>
+            </TouchableOpacity>
+          </Card>
+
+          <Card style={styles.webSecurityForm}>
+            <Text style={styles.sectionTitle}>Session Control</Text>
+            <Text style={styles.rowSubtitle}>
+              If another browser or device still has access, force a global sign out for all active sessions tied to this account.
+            </Text>
+            <TouchableOpacity style={styles.secondaryButton} onPress={handleGlobalSignOut}>
+              <Text style={styles.secondaryButtonText}>Sign Out All Devices</Text>
+            </TouchableOpacity>
+          </Card>
+        </RNView>
+      </WebAccountLayout>
+    );
+  }
+
   return (
     <Screen style={styles.container}>
       <Stack.Screen options={{ title: 'Security' }} />
@@ -291,6 +367,19 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: 16,
+  },
+  webSecurityCard: {
+    padding: 18,
+  },
+  webSecurityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  webSecurityForm: {
+    flex: 1,
+    minWidth: 320,
+    padding: 18,
   },
   row: {
     flexDirection: 'row',

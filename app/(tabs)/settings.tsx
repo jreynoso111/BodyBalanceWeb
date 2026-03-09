@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity, Alert, View as RNView, ScrollView, Image, RefreshControl } from 'react-native';
+import { StyleSheet, TouchableOpacity, Alert, View as RNView, ScrollView, Image, RefreshControl, Platform } from 'react-native';
+import { Link, Redirect } from 'expo-router';
 import { Text, View, Screen, Card } from '@/components/Themed';
 import { clearPersistedAuthState, supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -11,11 +12,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getProfileAvatarPublicUrl, isMissingAvatarUrlColumn } from '@/services/profileAvatar';
 import { getPlanLabel, normalizePlanTier } from '@/services/subscriptionPlan';
 import { getDeviceLanguage } from '@/constants/i18n';
+import { WebAccountLayout } from '@/components/website/WebAccountLayout';
 
 const LAST_PROTECTED_PATH_KEY = 'last_protected_path';
 
 export default function SettingsScreen() {
-    const { user, role, planTier, setSession, setUser, setRole, setPlanTier, setLanguage } = useAuthStore();
+    const { user, role, planTier, initialized, setSession, setUser, setRole, setPlanTier, setLanguage } = useAuthStore();
     const router = useRouter();
     const [prefs, setPrefs] = React.useState(DEFAULT_USER_PREFERENCES);
     const [profileName, setProfileName] = React.useState('');
@@ -167,6 +169,80 @@ export default function SettingsScreen() {
     }
 
     const avatarInitial = (profileName || user?.email || '?').trim().charAt(0).toUpperCase();
+
+    if (Platform.OS === 'web') {
+        if (initialized && !user) {
+            return <Redirect href="/(auth)/login" />;
+        }
+
+        return (
+            <WebAccountLayout
+                eyebrow="Account Center"
+                title="Manage the same Buddy Balance account you use in the app."
+                description="This web area gives you a cleaner desktop surface for profile management, membership status, security controls, notifications, exports, and support."
+            >
+                <View style={styles.webGrid}>
+                    <Card style={styles.webSummaryCard}>
+                        <RNView style={styles.webSummaryTop}>
+                            <RNView style={styles.avatarLarge}>
+                                {avatarUrl ? (
+                                    <Image source={{ uri: avatarUrl }} style={styles.avatarLargeImage} />
+                                ) : (
+                                    <Text style={styles.avatarLargeText}>{avatarInitial}</Text>
+                                )}
+                            </RNView>
+                            <RNView style={styles.webSummaryCopy}>
+                                <Text style={styles.webSummaryName}>{profileName || 'Buddy Balance account'}</Text>
+                                <Text style={styles.webSummaryEmail}>{user?.email}</Text>
+                                <Text style={styles.webSummaryMeta}>{getPlanLabel(planTier)} plan{hasAdminAccess ? ' • Admin access' : ''}</Text>
+                            </RNView>
+                        </RNView>
+                        <Text style={styles.webSummaryText}>
+                            Use Profile to edit identity details, Membership to review Premium access, Notifications to tune alerts, and Security to control biometrics and password changes.
+                        </Text>
+                    </Card>
+
+                    <Card style={styles.webActionCard}>
+                        <Text style={styles.webCardTitle}>Account management</Text>
+                        <RNView style={styles.webLinkStack}>
+                            <Link href="/dashboard" style={styles.webLinkButton}><Text style={styles.webLinkText}>Dashboard overview</Text></Link>
+                            <Link href="/profile" style={styles.webLinkButton}><Text style={styles.webLinkText}>Edit profile</Text></Link>
+                            <Link href="/subscription" style={styles.webLinkButton}><Text style={styles.webLinkText}>View membership</Text></Link>
+                            <Link href="/notifications" style={styles.webLinkButton}><Text style={styles.webLinkText}>Notification settings</Text></Link>
+                            <Link href="/security" style={styles.webLinkButton}><Text style={styles.webLinkText}>Security settings</Text></Link>
+                            <Link href="/help-support" style={styles.webLinkButton}><Text style={styles.webLinkText}>Support and policies</Text></Link>
+                        </RNView>
+                    </Card>
+                </View>
+
+                <View style={styles.webGrid}>
+                    <Card style={styles.webStatusCard}>
+                        <Text style={styles.webCardTitle}>Current status</Text>
+                        <Text style={styles.webStatusLine}>Plan: {getPlanLabel(planTier)}</Text>
+                        <Text style={styles.webStatusLine}>Push alerts: {prefs.push_enabled ? 'Enabled' : 'Disabled'}</Text>
+                        <Text style={styles.webStatusLine}>Biometric lock: {prefs.biometric_enabled ? 'Enabled' : 'Disabled'}</Text>
+                        <Text style={styles.webStatusLine}>Marketing updates: {prefs.marketing_enabled ? 'Enabled' : 'Disabled'}</Text>
+                    </Card>
+
+                    <Card style={styles.webStatusCard}>
+                        <Text style={styles.webCardTitle}>Quick actions</Text>
+                        {planTier === 'premium' ? (
+                            <TouchableOpacity style={styles.webPrimaryButton} onPress={handleExport}>
+                                <Text style={styles.webPrimaryButtonText}>Export CSV</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <Link href="/subscription" style={styles.webPrimaryButton}>
+                                <Text style={styles.webPrimaryButtonText}>See Premium options</Text>
+                            </Link>
+                        )}
+                        <TouchableOpacity style={styles.webSecondaryButton} onPress={handleSignOut} disabled={signingOut}>
+                            <Text style={styles.webSecondaryButtonText}>{signingOut ? 'Signing out...' : 'Sign out'}</Text>
+                        </TouchableOpacity>
+                    </Card>
+                </View>
+            </WebAccountLayout>
+        );
+    }
 
     return (
         <Screen style={styles.container} safeAreaEdges={['left', 'right', 'bottom']}>
@@ -342,5 +418,119 @@ const styles = StyleSheet.create({
         fontSize: 12,
         marginTop: 40,
         marginBottom: 20,
+    },
+    webGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 16,
+    },
+    webSummaryCard: {
+        flex: 1,
+        minWidth: 320,
+        padding: 22,
+    },
+    webActionCard: {
+        width: 320,
+        padding: 22,
+    },
+    webSummaryTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+        marginBottom: 16,
+    },
+    webSummaryCopy: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
+    webSummaryName: {
+        fontSize: 24,
+        lineHeight: 30,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
+    webSummaryEmail: {
+        marginTop: 4,
+        fontSize: 14,
+        lineHeight: 22,
+        color: '#475569',
+    },
+    webSummaryMeta: {
+        marginTop: 8,
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#6366F1',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    webSummaryText: {
+        fontSize: 15,
+        lineHeight: 24,
+        color: '#475569',
+    },
+    webCardTitle: {
+        fontSize: 18,
+        lineHeight: 24,
+        fontWeight: '900',
+        color: '#0F172A',
+        marginBottom: 14,
+    },
+    webLinkStack: {
+        gap: 10,
+        backgroundColor: 'transparent',
+    },
+    webLinkButton: {
+        minHeight: 46,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#D6DAFF',
+        backgroundColor: '#F8FAFC',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        justifyContent: 'center',
+    },
+    webLinkText: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#1E293B',
+    },
+    webStatusCard: {
+        flex: 1,
+        minWidth: 280,
+        padding: 22,
+    },
+    webStatusLine: {
+        fontSize: 14,
+        lineHeight: 22,
+        color: '#475569',
+        marginBottom: 8,
+    },
+    webPrimaryButton: {
+        minHeight: 48,
+        borderRadius: 16,
+        backgroundColor: '#4F46E5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 10,
+        paddingHorizontal: 16,
+    },
+    webPrimaryButtonText: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#FFFFFF',
+    },
+    webSecondaryButton: {
+        minHeight: 48,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+    },
+    webSecondaryButtonText: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#1E293B',
     },
 });

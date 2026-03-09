@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, View as RNView } from 'react-native';
-import { Stack } from 'expo-router';
+import { Alert, ScrollView, StyleSheet, Switch, View as RNView, Platform } from 'react-native';
+import { Redirect, Stack } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
 import { useAuthStore } from '@/store/authStore';
 import {
@@ -15,11 +15,12 @@ import {
   getPushPermissionStatus,
   registerForPushNotificationsAsync,
 } from '@/services/notificationService';
+import { WebAccountLayout } from '@/components/website/WebAccountLayout';
 
 type ToggleKey = 'push_enabled' | 'email_enabled' | 'reminder_enabled' | 'marketing_enabled';
 
 export default function NotificationsScreen() {
-  const { user } = useAuthStore();
+  const { user, initialized } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<ToggleKey | null>(null);
   const [pushPermission, setPushPermission] = useState<string>('unknown');
@@ -147,6 +148,55 @@ export default function NotificationsScreen() {
     setSaving(null);
   };
 
+  if (Platform.OS === 'web') {
+    if (initialized && !user) {
+      return <Redirect href="/(auth)/login" />;
+    }
+
+    return (
+      <WebAccountLayout
+        eyebrow="Notifications"
+        title="Choose how Buddy Balance should reach you."
+        description="These preferences update the same notification settings used by the mobile app."
+      >
+        <Card style={styles.webCard}>
+          <PreferenceRow
+            title="Push Notifications"
+            subtitle="On-device alerts for reminders on this phone"
+            value={prefs.push_enabled}
+            onChange={() => togglePreference('push_enabled')}
+            disabled={!!saving}
+          />
+          <PreferenceRow
+            title="Email Notifications"
+            subtitle="Preference saved for future email delivery rollout"
+            value={prefs.email_enabled}
+            onChange={() => togglePreference('email_enabled')}
+            disabled={!!saving}
+          />
+          <PreferenceRow
+            title="Payment Reminders"
+            subtitle="On-device reminder alerts before due dates"
+            value={prefs.reminder_enabled}
+            onChange={() => togglePreference('reminder_enabled')}
+            disabled={!!saving}
+          />
+          <PreferenceRow
+            title="Product Updates"
+            subtitle="Preference saved for future feature announcements"
+            value={prefs.marketing_enabled}
+            onChange={() => togglePreference('marketing_enabled')}
+            noBorder
+            disabled={!!saving}
+          />
+        </Card>
+        <Card style={styles.webStatusCard}>
+          <Text style={styles.webStatusText}>{loading ? 'Loading preferences...' : `Push permission: ${pushPermission}`}</Text>
+        </Card>
+      </WebAccountLayout>
+    );
+  }
+
   return (
     <Screen style={styles.container}>
       <Stack.Screen options={{ title: 'Notifications' }} />
@@ -237,6 +287,18 @@ const styles = StyleSheet.create({
   card: {
     padding: 0,
     overflow: 'hidden',
+  },
+  webCard: {
+    padding: 0,
+    overflow: 'hidden',
+  },
+  webStatusCard: {
+    padding: 22,
+  },
+  webStatusText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#475569',
   },
   row: {
     flexDirection: 'row',

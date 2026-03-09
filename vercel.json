@@ -1,23 +1,5 @@
 {
   "buildCommand": "npm run build:web",
   "outputDirectory": "dist",
-  "cleanUrls": true,
-  "rewrites": [
-    {
-      "source": "/faq",
-      "destination": "/faq.html"
-    },
-    {
-      "source": "/help-support",
-      "destination": "/help-support.html"
-    },
-    {
-      "source": "/privacy",
-      "destination": "/privacy.html"
-    },
-    {
-      "source": "/terms",
-      "destination": "/terms.html"
-    }
-  ]
+  "cleanUrls": true
 }

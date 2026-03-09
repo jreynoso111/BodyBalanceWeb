@@ -1,5 +1,5 @@
-import React from 'react';
-import { Platform, ScrollView, StyleSheet, TouchableOpacity, View as RNView } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View as RNView } from 'react-native';
 import { Link, Stack, useRouter } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,8 +12,8 @@ import {
   Users,
 } from 'lucide-react-native';
 import { AppLegalFooter } from '@/components/AppLegalFooter';
-import { SupportMessageCard } from '@/components/support/SupportMessageCard';
-import { PublicSiteLayout } from '@/components/website/PublicSiteLayout';
+import { PublicContactForm } from '@/components/support/PublicContactForm';
+import { PublicCard, PublicSiteLayout } from '@/components/website/PublicSiteLayout';
 
 type QuickGuideItem = {
   icon: React.ComponentType<{ size?: number; color?: string }>;
@@ -95,36 +95,49 @@ export default function HelpSupportScreen() {
     return (
       <PublicSiteLayout
         eyebrow="Support"
-        title="Support is the public home for help, policy, and account guidance."
-        description="This section is the public support desk for Buddy Balance. Start here, then branch into FAQ, contact flow, privacy, or terms depending on whether the question is product, account, or policy-related."
+        title="Support is the main home for product help, account questions, and public contact."
+        description="Use this hub to reach Buddy Balance support, understand the current product behavior, and open the related policy and FAQ pages that support store submission and customer trust."
         actions={[
           { href: '/faq', label: 'Browse FAQ' },
-          { href: '/contact', label: 'Contact support', variant: 'secondary' },
+          { href: '/privacy', label: 'Review Privacy', variant: 'secondary' },
         ]}
       >
-        <LinearGradient colors={['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.74)']} style={styles.webSupportPanel}>
-          <Text style={styles.webSupportLabel}>START HERE</Text>
-          <RNView style={styles.webSupportGrid}>
-            <RNView style={styles.webSupportItem}>
-              <Text style={styles.webSupportTitle}>Support is the primary section</Text>
-              <Text style={styles.webSupportBody}>
-                FAQ, Contact, Privacy, and Terms all live under the same support area so store links, public web links, and user guidance stay consistent.
-              </Text>
+        <RNView style={styles.webGuideGrid}>
+          <PublicCard
+            title="Support sections"
+            description="Treat this page as the main support hub. The other pages are supporting references, not separate microsites."
+          >
+            <RNView style={styles.webLinkStack}>
+              <Link href="/faq" style={styles.webGuideLink}>
+                <Text style={styles.webGuideLinkLabel}>FAQ</Text>
+                <Text style={styles.webGuideLinkBody}>Current answers for records, contacts, notifications, Premium, and account recovery.</Text>
+              </Link>
+              <Link href="/privacy" style={styles.webGuideLink}>
+                <Text style={styles.webGuideLinkLabel}>Privacy Policy</Text>
+                <Text style={styles.webGuideLinkBody}>How account data, record history, support messages, and usage signals are handled.</Text>
+              </Link>
+              <Link href="/terms" style={styles.webGuideLink}>
+                <Text style={styles.webGuideLinkLabel}>Terms of Service</Text>
+                <Text style={styles.webGuideLinkBody}>Usage rules, account expectations, and the current product scope.</Text>
+              </Link>
             </RNView>
-            <RNView style={styles.webSupportItem}>
-              <Text style={styles.webSupportTitle}>Use the right lane</Text>
-              <Text style={styles.webSupportBody}>
-                Use FAQ for product behavior, Contact for account or launch questions, Privacy for data handling, and Terms for usage rules and product limits.
-              </Text>
-            </RNView>
-            <RNView style={styles.webSupportItem}>
-              <Text style={styles.webSupportTitle}>Account issues stay attached to the account</Text>
-              <Text style={styles.webSupportBody}>
-                If the issue depends on your records, contacts, or notifications, sign in and use the tracked in-app support flow instead of a loose public email thread.
-              </Text>
-            </RNView>
-          </RNView>
-        </LinearGradient>
+          </PublicCard>
+
+          <PublicCard
+            title="Account-specific support"
+            description={
+              user?.id
+                ? 'You are signed in, so you can send an in-app message below and it will be stored for administrator follow-up.'
+                : 'For account-specific issues, the authenticated support flow still matters. Sign in when the problem depends on your own account, contacts, or shared records.'
+            }
+          >
+            <Text style={styles.webSupportNote}>
+              Public contact is best for launch questions, partnerships, and general product feedback. Signed-in support is best for account, record, and history issues.
+            </Text>
+          </PublicCard>
+        </RNView>
+
+        <PublicContactForm />
 
         <RNView style={styles.supportDestinationGrid}>
           {SUPPORT_DESTINATIONS.map((item) => (
@@ -248,10 +261,45 @@ const styles = StyleSheet.create({
     marginTop: 16,
     gap: 14,
   },
-  supportDestinationGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
+  webGuideGrid: {
+    gap: 16,
+    backgroundColor: 'transparent',
+  },
+  webLinkStack: {
+    gap: 12,
+    marginTop: 18,
+    backgroundColor: 'transparent',
+  },
+  webGuideLink: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#D6DAFF',
+    backgroundColor: '#F8FAFF',
+    padding: 16,
+  },
+  webGuideLinkLabel: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  webGuideLinkBody: {
+    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 21,
+    color: '#475569',
+  },
+  webSupportNote: {
+    marginTop: 18,
+    fontSize: 13,
+    lineHeight: 21,
+    color: '#475569',
+  },
+  contactTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 6,
   },
   supportDestinationLink: {
     width: '100%',

@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, View, Pressable, Dimensions, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, Pressable, Dimensions, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import {
@@ -24,6 +24,56 @@ const { width } = Dimensions.get('window');
 
 export default function LandingPage() {
     const router = useRouter();
+    const [activeAppSlide, setActiveAppSlide] = useState(0);
+    const [activeNotificationSlide, setActiveNotificationSlide] = useState(0);
+
+    const APP_SLIDES = [
+        {
+            title: 'Add friends',
+            subtitle: 'Link accounts so both people see the shared history.',
+            accent: '#6366F1',
+            lines: ['Search by friend code', 'Invite by email or text', 'Connected contact card'],
+        },
+        {
+            title: 'Create a record',
+            subtitle: 'Track cash, item loans, and partial payments cleanly.',
+            accent: '#0EA5E9',
+            lines: ['Amount and direction', 'Due date or return', 'Shared ledger update'],
+        },
+        {
+            title: 'Review balances',
+            subtitle: 'See what changed without losing the story.',
+            accent: '#22C55E',
+            lines: ['Open balance summary', 'Shared events timeline', 'Zero-balance clarity'],
+        },
+        {
+            title: 'Premium controls',
+            subtitle: 'Export history and manage your plan.',
+            accent: '#F59E0B',
+            lines: ['CSV export', 'Unlimited contacts', 'Admin-ready tools'],
+        },
+    ];
+
+    const NOTIFICATION_SLIDES = [
+        {
+            title: 'Confirmation needed',
+            subtitle: 'Approvals only when required.',
+            accent: '#6366F1',
+            lines: ['Pending confirmation', 'Tap to review', 'Shared status update'],
+        },
+        {
+            title: 'Informational event',
+            subtitle: 'No fake pending work.',
+            accent: '#14B8A6',
+            lines: ['New record added', 'Payment logged', 'Balance recalculated'],
+        },
+        {
+            title: 'Reminder alert',
+            subtitle: 'Stay ahead of due dates.',
+            accent: '#F97316',
+            lines: ['Upcoming due soon', 'Friendly reminder', 'No approval required'],
+        },
+    ];
 
     if (Platform.OS === 'web') {
         return (
@@ -43,24 +93,164 @@ export default function LandingPage() {
                     </Text>
                 </View>
 
-                <View style={styles.webMagazineGrid}>
-                    <PublicCard
-                        title="A shared ledger that still feels personal"
-                        description="The app was designed for real relationships, not anonymous invoicing. You can track borrowed cash, returned items, partial payments, friend links, and notification events without flattening everything into boring spreadsheet language."
+                <View style={styles.webShowcase}>
+                    <View style={styles.webShowcaseIntro}>
+                        <Text style={styles.webShowcaseEyebrow}>Inside the app</Text>
+                        <Text style={styles.webShowcaseTitle}>A clean mobile ledger, designed for real people.</Text>
+                        <Text style={styles.webShowcaseBody}>
+                            These previews are sized to scale cleanly across desktop, tablet, and mobile without overlapping the rest of the page.
+                        </Text>
+                    </View>
+
+                    <View style={styles.webShowcaseRow}>
+                        <View style={styles.phoneMock}>
+                            <View style={styles.phoneMockNotch} />
+                            <View style={styles.phoneMockHeader}>
+                                <Text style={styles.phoneMockTitle}>Home</Text>
+                                <Text style={styles.phoneMockBadge}>Premium</Text>
+                            </View>
+                            <View style={styles.phoneMockCard}>
+                                <Text style={styles.phoneMockAmount}>+$3,650</Text>
+                                <Text style={styles.phoneMockHint}>Friends owe you more than you owe them.</Text>
+                            </View>
+                            <View style={styles.phoneMockRow}>
+                                <Text style={styles.phoneMockLabel}>Mia Chen</Text>
+                                <Text style={styles.phoneMockValue}>+$120</Text>
+                            </View>
+                            <View style={styles.phoneMockRow}>
+                                <Text style={styles.phoneMockLabel}>Diego Ruiz</Text>
+                                <Text style={styles.phoneMockValue}>+$85</Text>
+                            </View>
+                        </View>
+
+                        <View style={[styles.phoneMock, styles.phoneMockAlt]}>
+                            <View style={styles.phoneMockNotch} />
+                            <View style={styles.phoneMockHeader}>
+                                <Text style={styles.phoneMockTitle}>Contacts</Text>
+                                <Text style={styles.phoneMockBadgeAlt}>Shared</Text>
+                            </View>
+                            <View style={styles.phoneMockRow}>
+                                <Text style={styles.phoneMockLabel}>Nina Park</Text>
+                                <Text style={styles.phoneMockValue}>$240</Text>
+                            </View>
+                            <View style={styles.phoneMockRow}>
+                                <Text style={styles.phoneMockLabel}>Owen Price</Text>
+                                <Text style={styles.phoneMockValue}>$60</Text>
+                            </View>
+                            <View style={styles.phoneMockCardSoft}>
+                                <Text style={styles.phoneMockHint}>Tap a contact to create a new record instantly.</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.phoneMock}>
+                            <View style={styles.phoneMockNotch} />
+                            <View style={styles.phoneMockHeader}>
+                                <Text style={styles.phoneMockTitle}>Settings</Text>
+                                <Text style={styles.phoneMockBadge}>Pro</Text>
+                            </View>
+                            <View style={styles.phoneMockRow}>
+                                <Text style={styles.phoneMockLabel}>Security</Text>
+                                <Text style={styles.phoneMockValue}>On</Text>
+                            </View>
+                            <View style={styles.phoneMockRow}>
+                                <Text style={styles.phoneMockLabel}>Notifications</Text>
+                                <Text style={styles.phoneMockValue}>Enabled</Text>
+                            </View>
+                            <View style={styles.phoneMockCard}>
+                                <Text style={styles.phoneMockHint}>Export data and manage Premium in one place.</Text>
+                            </View>
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.webCarouselSection}>
+                    <View style={styles.webCarouselHeader}>
+                        <Text style={styles.webCarouselEyebrow}>Product moments</Text>
+                        <Text style={styles.webCarouselTitle}>See the flows your customers will actually use.</Text>
+                        <Text style={styles.webCarouselBody}>
+                            Each panel represents a real screen inside Buddy Balance. Tap a preview to bring it forward and scan the details.
+                        </Text>
+                    </View>
+
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.webCarouselTrack}
                     >
-                        <View style={styles.webFeatureList}>
-                            <FeatureBullet
-                                icon={<WalletCards size={16} color="#4F46E5" />}
-                                text="Cash and item records live in the same timeline."
-                            />
-                            <FeatureBullet
-                                icon={<BellRing size={16} color="#0EA5E9" />}
-                                text="Informational events notify the other side without fake approvals."
-                            />
-                            <FeatureBullet
-                                icon={<UsersRound size={16} color="#16A34A" />}
-                                text="Friend-linked contacts stay mirrored instead of duplicating bad data."
-                            />
+                        {APP_SLIDES.map((slide, index) => {
+                            const active = index === activeAppSlide;
+                            return (
+                                <Pressable
+                                    key={slide.title}
+                                    onPress={() => setActiveAppSlide(index)}
+                                    style={[
+                                        styles.carouselCard,
+                                        active && styles.carouselCardActive,
+                                    ]}
+                                >
+                                    <View style={[styles.carouselBadge, { backgroundColor: slide.accent }]} />
+                                    <Text style={styles.carouselTitle}>{slide.title}</Text>
+                                    <Text style={styles.carouselSubtitle}>{slide.subtitle}</Text>
+                                    <View style={styles.carouselList}>
+                                        {slide.lines.map((line) => (
+                                            <Text key={line} style={styles.carouselLine}>{line}</Text>
+                                        ))}
+                                    </View>
+                                </Pressable>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+
+                <View style={styles.webCarouselSection}>
+                    <View style={styles.webCarouselHeader}>
+                        <Text style={styles.webCarouselEyebrow}>Notifications</Text>
+                        <Text style={styles.webCarouselTitle}>Signals that are clear, not noisy.</Text>
+                        <Text style={styles.webCarouselBody}>
+                            Notifications appear only when they matter. Tap to expand the preview and see the real message styles.
+                        </Text>
+                    </View>
+
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.webCarouselTrack}
+                    >
+                        {NOTIFICATION_SLIDES.map((slide, index) => {
+                            const active = index === activeNotificationSlide;
+                            return (
+                                <Pressable
+                                    key={slide.title}
+                                    onPress={() => setActiveNotificationSlide(index)}
+                                    style={[
+                                        styles.carouselCard,
+                                        active && styles.carouselCardActive,
+                                    ]}
+                                >
+                                    <View style={[styles.carouselBadge, { backgroundColor: slide.accent }]} />
+                                    <Text style={styles.carouselTitle}>{slide.title}</Text>
+                                    <Text style={styles.carouselSubtitle}>{slide.subtitle}</Text>
+                                    <View style={styles.carouselList}>
+                                        {slide.lines.map((line) => (
+                                            <Text key={line} style={styles.carouselLine}>{line}</Text>
+                                        ))}
+                                    </View>
+                                </Pressable>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+
+                <View style={styles.webHighlights}>
+                    <View style={styles.webFeatureCard}>
+                        <View style={styles.webFeatureIcon}>
+                            <WalletCards size={22} color="#4F46E5" />
+                        </View>
+                        <View style={styles.webFeatureCopy}>
+                            <Text style={styles.webFeatureTitle}>Money and item records</Text>
+                            <Text style={styles.webFeatureText}>
+                                Track cash loans, item returns, partial payments, and direction of ownership in one shared ledger.
+                            </Text>
                         </View>
                     </PublicCard>
 
@@ -346,9 +536,214 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         gap: 18,
     },
-    webFeatureList: {
-        marginTop: 16,
-        gap: 12,
+    webShowcase: {
+        marginTop: 8,
+        gap: 18,
+    },
+    webShowcaseIntro: {
+        padding: 18,
+        borderRadius: 22,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    webShowcaseEyebrow: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#6366F1',
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+    },
+    webShowcaseTitle: {
+        marginTop: 10,
+        fontSize: 22,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
+    webShowcaseBody: {
+        marginTop: 8,
+        fontSize: 14,
+        lineHeight: 22,
+        color: '#475569',
+    },
+    webShowcaseRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 18,
+    },
+    phoneMock: {
+        flex: 1,
+        minWidth: 220,
+        maxWidth: 300,
+        borderRadius: 26,
+        padding: 16,
+        backgroundColor: '#0F172A',
+        borderWidth: 1,
+        borderColor: '#1E293B',
+    },
+    phoneMockAlt: {
+        backgroundColor: '#111827',
+        borderColor: '#334155',
+    },
+    phoneMockNotch: {
+        alignSelf: 'center',
+        width: 80,
+        height: 16,
+        borderRadius: 999,
+        backgroundColor: '#0B1220',
+        marginBottom: 14,
+    },
+    phoneMockHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    phoneMockTitle: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#E2E8F0',
+    },
+    phoneMockBadge: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#0F172A',
+        backgroundColor: '#FDE68A',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    phoneMockBadgeAlt: {
+        fontSize: 11,
+        fontWeight: '800',
+        color: '#0F172A',
+        backgroundColor: '#BFDBFE',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 999,
+    },
+    phoneMockCard: {
+        borderRadius: 16,
+        padding: 12,
+        backgroundColor: '#ECFDF3',
+        marginBottom: 12,
+    },
+    phoneMockCardSoft: {
+        borderRadius: 16,
+        padding: 12,
+        backgroundColor: '#E0F2FE',
+        marginTop: 12,
+    },
+    phoneMockAmount: {
+        fontSize: 20,
+        fontWeight: '900',
+        color: '#166534',
+    },
+    phoneMockHint: {
+        marginTop: 6,
+        fontSize: 12,
+        lineHeight: 18,
+        color: '#1E293B',
+    },
+    phoneMockRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(148,163,184,0.25)',
+    },
+    phoneMockLabel: {
+        fontSize: 12,
+        color: '#E2E8F0',
+        fontWeight: '700',
+    },
+    phoneMockValue: {
+        fontSize: 12,
+        color: '#E2E8F0',
+        fontWeight: '800',
+    },
+    webCarouselSection: {
+        marginTop: 6,
+        gap: 16,
+    },
+    webCarouselHeader: {
+        padding: 18,
+        borderRadius: 22,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    webCarouselEyebrow: {
+        fontSize: 12,
+        fontWeight: '800',
+        color: '#6366F1',
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+    },
+    webCarouselTitle: {
+        marginTop: 10,
+        fontSize: 22,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
+    webCarouselBody: {
+        marginTop: 8,
+        fontSize: 14,
+        lineHeight: 22,
+        color: '#475569',
+    },
+    webCarouselTrack: {
+        gap: 16,
+        paddingVertical: 6,
+        paddingHorizontal: 6,
+    },
+    carouselCard: {
+        width: 240,
+        borderRadius: 22,
+        padding: 18,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#1E1B4B',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.08,
+        shadowRadius: 20,
+        elevation: 6,
+        transform: [{ scale: 0.96 }],
+    },
+    carouselCardActive: {
+        width: 280,
+        borderColor: '#6366F1',
+        transform: [{ scale: 1 }],
+    },
+    carouselBadge: {
+        width: 48,
+        height: 6,
+        borderRadius: 999,
+        marginBottom: 14,
+    },
+    carouselTitle: {
+        fontSize: 18,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
+    carouselSubtitle: {
+        marginTop: 6,
+        fontSize: 13,
+        lineHeight: 20,
+        color: '#475569',
+    },
+    carouselList: {
+        marginTop: 14,
+        gap: 8,
+    },
+    carouselLine: {
+        fontSize: 12,
+        lineHeight: 18,
+        color: '#64748B',
+    },
+    webHighlights: {
+        gap: 16,
     },
     webFeatureBullet: {
         flexDirection: 'row',

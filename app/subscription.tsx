@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Alert, Linking, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View as RNView } from 'react-native';
+import { Redirect } from 'expo-router';
 import { Check, Shield, Smartphone } from 'lucide-react-native';
 
 import { Card, Screen, Text } from '@/components/Themed';
@@ -12,10 +13,12 @@ import {
 import { PLAN_LIMITS } from '@/services/subscriptionPlan';
 import { formatReferralExpiry, getMyInviteSummary, InviteSummary } from '@/services/referrals';
 import { useAuthStore } from '@/store/authStore';
+import { WebAccountLayout } from '@/components/website/WebAccountLayout';
 
 export default function SubscriptionScreen() {
   const planTier = useAuthStore((state) => state.planTier);
   const user = useAuthStore((state) => state.user);
+  const initialized = useAuthStore((state) => state.initialized);
   const planTitle = planTier === 'premium' ? 'Premium active' : 'Free plan';
   const unavailableReason = getBillingUnavailableReason();
   const [purchasePending, setPurchasePending] = React.useState(false);
@@ -102,6 +105,93 @@ export default function SubscriptionScreen() {
       setSendingInvite(false);
     }
   };
+
+  if (Platform.OS === 'web') {
+    if (initialized && !user) {
+      return <Redirect href="/(auth)/login" />;
+    }
+
+    return (
+      <WebAccountLayout
+        eyebrow="Membership"
+        title={planTier === 'premium' ? 'Premium is active on this account.' : 'Free plan with a clear upgrade path.'}
+        description="Membership on web reads the same plan state as the app. Premium, referrals, limits, and manual admin upgrades all show here."
+      >
+        <RNView style={styles.webGrid}>
+          <Card style={styles.webPanel}>
+            <Text style={styles.webPanelTitle}>Current plan</Text>
+            <Text style={styles.webPlanValue}>{planTitle}</Text>
+            <Text style={styles.webBody}>
+              Buddy Balance Pro removes the friend and active record limits. Android checkout will be handled directly by Google Play when store billing is fully wired.
+            </Text>
+            {planTier !== 'premium' ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[styles.webPrimaryButton, purchasePending && styles.buttonDisabled]}
+                onPress={() => void handlePurchase()}
+                disabled={purchasePending}
+              >
+                {purchasePending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.webPrimaryButtonText}>Try Premium</Text>}
+              </TouchableOpacity>
+            ) : null}
+          </Card>
+
+          <Card style={styles.webPanel}>
+            <Text style={styles.webPanelTitle}>What Premium unlocks</Text>
+            {[
+              `Unlimited linked friends instead of ${PLAN_LIMITS.free.linkedFriends}`,
+              `Unlimited active records instead of ${PLAN_LIMITS.free.activeRecords}`,
+              'Priority support for account issues',
+              ...(planTier === 'premium' ? [] : ['1 free month of Premium every 3 successful invite code uses']),
+            ].map((benefit) => (
+              <RNView key={benefit} style={styles.webBenefitRow}>
+                <Check size={15} color="#10B981" />
+                <Text style={styles.webBenefitText}>{benefit}</Text>
+              </RNView>
+            ))}
+          </Card>
+        </RNView>
+
+        {referralSummary ? (
+          <RNView style={styles.webGrid}>
+            <Card style={styles.webPanel}>
+              <Text style={styles.webPanelTitle}>Referral status</Text>
+              <Text style={styles.webBody}>
+                {referralSummary.premiumReferralExpiresAt
+                  ? `Referral Premium active until ${formatReferralExpiry(referralSummary.premiumReferralExpiresAt)}.`
+                  : `${referralSummary.referralCount}/3 invite code uses earned toward your next free Premium month.`}
+              </Text>
+              <Text style={styles.webReferralCode}>Your code: {referralSummary.inviteCode || 'Loading...'}</Text>
+            </Card>
+
+            {planTier !== 'premium' ? (
+              <Card style={styles.webPanel}>
+                <Text style={styles.webPanelTitle}>Send an invite</Text>
+                <TextInput
+                  value={inviteEmail}
+                  onChangeText={setInviteEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  placeholder="friend@example.com"
+                  placeholderTextColor="#94A3B8"
+                  style={styles.inviteInput}
+                />
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[styles.webPrimaryButton, sendingInvite && styles.buttonDisabled]}
+                  onPress={() => void handleSendInviteEmail()}
+                  disabled={sendingInvite}
+                >
+                  {sendingInvite ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.webPrimaryButtonText}>Send invite email</Text>}
+                </TouchableOpacity>
+              </Card>
+            ) : null}
+          </RNView>
+        ) : null}
+      </WebAccountLayout>
+    );
+  }
 
   return (
     <Screen style={styles.container}>
@@ -395,6 +485,67 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#0F172A',
     marginBottom: 12,
+  },
+  webGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  webPanel: {
+    flex: 1,
+    minWidth: 320,
+    padding: 22,
+  },
+  webPanelTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  webPlanValue: {
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '900',
+    color: '#4338CA',
+    marginBottom: 12,
+  },
+  webBody: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#475569',
+    marginBottom: 16,
+  },
+  webBenefitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 12,
+  },
+  webBenefitText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#334155',
+  },
+  webPrimaryButton: {
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: '#4F46E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  webPrimaryButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  webReferralCode: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   inviteHelper: {
     marginTop: 12,

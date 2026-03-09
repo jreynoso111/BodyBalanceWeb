@@ -2,24 +2,28 @@ import React, { useState } from 'react';
 import { StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, View as RNView } from 'react-native';
 import { Text, View, Screen, Card } from '@/components/Themed';
 import { supabase } from '@/services/supabase';
-import { Stack, useRouter } from 'expo-router';
+import { Redirect, Stack, useRouter } from 'expo-router';
 import { Mail, Lock } from 'lucide-react-native';
 import { BrandLogo } from '@/components/BrandLogo';
 import { GoogleLogo } from '@/components/GoogleLogo';
 import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { waitForAuthSession } from '@/services/authSession';
 import { getGoogleOAuthUnavailableReason, isGoogleOAuthEnabledForBuild, signInWithGoogle } from '@/services/oauth';
+import { useAuthStore } from '@/store/authStore';
+import { WebAuthLayout } from '@/components/website/WebAuthLayout';
 
 type FeedbackTone = 'error' | 'success' | 'info';
 
 export default function LoginScreen() {
     const router = useRouter();
+    const { initialized, user } = useAuthStore();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [authAction, setAuthAction] = useState<'sign_in' | 'google' | null>(null);
     const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
     const googleEnabledForBuild = isGoogleOAuthEnabledForBuild();
     const googleUnavailableReason = getGoogleOAuthUnavailableReason();
+    const nextRoute = Platform.OS === 'web' ? '/settings' : '/(tabs)';
 
     const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
@@ -28,12 +32,9 @@ export default function LoginScreen() {
     const showMessage = (title: string, message: string, tone: FeedbackTone) => {
         setFeedback({ tone, text: message });
 
-        if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
-            globalThis.alert(`${title}\n\n${message}`);
-            return;
+        if (Platform.OS !== 'web') {
+            Alert.alert(title, message);
         }
-
-        Alert.alert(title, message);
     };
 
     const withTimeout = async <T,>(promise: Promise<T>, timeoutMs = 20000): Promise<T> => {
@@ -96,7 +97,7 @@ export default function LoginScreen() {
             }
 
             setFeedback({ tone: 'success', text: 'Signed in successfully.' });
-            router.replace('/(tabs)');
+            router.replace(nextRoute as never);
         } catch (error: any) {
             showMessage('Sign in failed', error?.message || 'Unable to sign in right now. Please try again.', 'error');
         } finally {
@@ -118,7 +119,7 @@ export default function LoginScreen() {
             const result = await withTimeout(signInWithGoogle(), 30000);
             if (result.status === 'success') {
                 setFeedback({ tone: 'success', text: 'Signed in with Google.' });
-                router.replace('/(tabs)');
+                router.replace(nextRoute as never);
                 return;
             }
 
@@ -140,6 +141,113 @@ export default function LoginScreen() {
         }
     };
 
+    if (Platform.OS === 'web' && initialized && user) {
+        return <Redirect href="/settings" />;
+    }
+
+    const form = (
+        <>
+            <RNView style={styles.inputGroup}>
+                <Text style={styles.label}>Email Address</Text>
+                <RNView style={styles.inputWrapper}>
+                    <Mail size={18} color="#94A3B8" style={styles.inputIcon} />
+                    <TextInput
+                        placeholder="Enter your email"
+                        placeholderTextColor="#94A3B8"
+                        value={email}
+                        onChangeText={setEmail}
+                        autoCapitalize="none"
+                        style={styles.input}
+                    />
+                </RNView>
+            </RNView>
+
+            <RNView style={styles.inputGroup}>
+                <Text style={styles.label}>Password</Text>
+                <RNView style={styles.inputWrapper}>
+                    <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
+                    <TextInput
+                        placeholder="••••••••"
+                        placeholderTextColor="#94A3B8"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        style={styles.input}
+                    />
+                </RNView>
+            </RNView>
+
+            <TouchableOpacity
+                onPress={() => router.push('/forgot-password')}
+                disabled={!!authAction}
+                style={styles.forgotButton}
+            >
+                <Text style={styles.forgotButtonText}>Forgot your password?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+                onPress={onSignIn}
+                disabled={!!authAction}
+                style={styles.primaryButton}
+            >
+                <Text style={styles.buttonText}>{authAction === 'sign_in' ? 'SIGNING IN...' : 'Sign In'}</Text>
+            </TouchableOpacity>
+
+            {googleEnabledForBuild ? (
+                <>
+                    <TouchableOpacity
+                        onPress={onGoogleSignIn}
+                        disabled={!!authAction}
+                        style={[styles.googleButton, googleUnavailableReason && styles.googleButtonUnavailable]}
+                    >
+                        <GoogleLogo />
+                        <Text style={styles.googleButtonText}>
+                            {authAction === 'google'
+                                ? 'CONNECTING TO GOOGLE...'
+                                : googleUnavailableReason
+                                    ? 'Google Sign In Requires App Build'
+                                    : 'Continue with Google'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {googleUnavailableReason ? (
+                        <Text style={styles.googleHintText}>{googleUnavailableReason}</Text>
+                    ) : null}
+                </>
+            ) : null}
+
+            <TouchableOpacity
+                onPress={() => router.push('/(auth)/register')}
+                disabled={!!authAction}
+                style={styles.secondaryButton}
+            >
+                <Text style={styles.secondaryButtonText}>Create New Account</Text>
+            </TouchableOpacity>
+
+            {feedback ? (
+                <RNView
+                    style={[
+                        styles.feedbackBox,
+                        feedback.tone === 'error' && styles.feedbackError,
+                        feedback.tone === 'success' && styles.feedbackSuccess,
+                        feedback.tone === 'info' && styles.feedbackInfo,
+                    ]}
+                >
+                    <Text
+                        style={[
+                            styles.feedbackText,
+                            feedback.tone === 'error' && styles.feedbackTextError,
+                            feedback.tone === 'success' && styles.feedbackTextSuccess,
+                            feedback.tone === 'info' && styles.feedbackTextInfo,
+                        ]}
+                    >
+                        {feedback.text}
+                    </Text>
+                </RNView>
+            ) : null}
+        </>
+    );
+
     return (
         <Screen style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -147,6 +255,29 @@ export default function LoginScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
+                {Platform.OS === 'web' ? (
+                    <WebAuthLayout
+                        eyebrow="Web sign in"
+                        title="Sign in to the same Buddy Balance account you use in the app."
+                        description="Access your profile, membership, notifications, security controls, and support history from the browser with the same Supabase account."
+                        highlights={[
+                            'Shared profile and preferences',
+                            'Membership and referral status',
+                            'Security and notifications',
+                            'Same reset and recovery flow',
+                        ]}
+                        altAction={{ href: '/', label: 'Back to public site' }}
+                    >
+                        <View style={styles.webIntro}>
+                            <Text style={styles.webTitle}>Welcome back</Text>
+                            <Text style={styles.webBody}>
+                                Sign in to manage your account, review your plan, and keep profile details aligned
+                                across mobile and web.
+                            </Text>
+                        </View>
+                        <Card style={styles.authCard}>{form}</Card>
+                    </WebAuthLayout>
+                ) : (
                 <RNView style={styles.content}>
                     <RNView style={styles.header}>
                         <TouchableOpacity activeOpacity={0.8} onPress={() => router.replace('/')}>
@@ -155,109 +286,11 @@ export default function LoginScreen() {
                         <Text style={styles.subtitle}>Securely manage what's yours.</Text>
                     </RNView>
 
-                    <Card style={styles.authCard}>
-                        <RNView style={styles.inputGroup}>
-                            <Text style={styles.label}>Email Address</Text>
-                            <RNView style={styles.inputWrapper}>
-                                <Mail size={18} color="#94A3B8" style={styles.inputIcon} />
-                                <TextInput
-                                    placeholder="Enter your email"
-                                    placeholderTextColor="#94A3B8"
-                                    value={email}
-                                    onChangeText={setEmail}
-                                    autoCapitalize="none"
-                                    style={styles.input}
-                                />
-                            </RNView>
-                        </RNView>
-
-                        <RNView style={styles.inputGroup}>
-                            <Text style={styles.label}>Password</Text>
-                            <RNView style={styles.inputWrapper}>
-                                <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
-                                <TextInput
-                                    placeholder="••••••••"
-                                    placeholderTextColor="#94A3B8"
-                                    value={password}
-                                    onChangeText={setPassword}
-                                    secureTextEntry
-                                    style={styles.input}
-                                />
-                            </RNView>
-                        </RNView>
-
-                        <TouchableOpacity
-                            onPress={() => router.push('/forgot-password')}
-                            disabled={!!authAction}
-                            style={styles.forgotButton}
-                        >
-                            <Text style={styles.forgotButtonText}>Forgot your password?</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={onSignIn}
-                            disabled={!!authAction}
-                            style={styles.primaryButton}
-                        >
-                            <Text style={styles.buttonText}>{authAction === 'sign_in' ? 'SIGNING IN...' : 'Sign In'}</Text>
-                        </TouchableOpacity>
-
-                        {googleEnabledForBuild ? (
-                            <>
-                                <TouchableOpacity
-                                    onPress={onGoogleSignIn}
-                                    disabled={!!authAction}
-                                    style={[styles.googleButton, googleUnavailableReason && styles.googleButtonUnavailable]}
-                                >
-                                    <GoogleLogo />
-                                    <Text style={styles.googleButtonText}>
-                                        {authAction === 'google'
-                                            ? 'CONNECTING TO GOOGLE...'
-                                            : googleUnavailableReason
-                                                ? 'Google Sign In Requires App Build'
-                                                : 'Continue with Google'}
-                                    </Text>
-                                </TouchableOpacity>
-
-                                {googleUnavailableReason ? (
-                                    <Text style={styles.googleHintText}>{googleUnavailableReason}</Text>
-                                ) : null}
-                            </>
-                        ) : null}
-
-                        <TouchableOpacity
-                            onPress={() => router.push('/(auth)/register')}
-                            disabled={!!authAction}
-                            style={styles.secondaryButton}
-                        >
-                            <Text style={styles.secondaryButtonText}>Create New Account</Text>
-                        </TouchableOpacity>
-
-                        {feedback ? (
-                            <RNView
-                                style={[
-                                    styles.feedbackBox,
-                                    feedback.tone === 'error' && styles.feedbackError,
-                                    feedback.tone === 'success' && styles.feedbackSuccess,
-                                    feedback.tone === 'info' && styles.feedbackInfo,
-                                ]}
-                            >
-                                <Text
-                                    style={[
-                                        styles.feedbackText,
-                                        feedback.tone === 'error' && styles.feedbackTextError,
-                                        feedback.tone === 'success' && styles.feedbackTextSuccess,
-                                        feedback.tone === 'info' && styles.feedbackTextInfo,
-                                    ]}
-                                >
-                                    {feedback.text}
-                                </Text>
-                            </RNView>
-                        ) : null}
-                    </Card>
+                    <Card style={styles.authCard}>{form}</Card>
 
                     <AppLegalFooter style={styles.copyright} />
                 </RNView>
+                )}
             </KeyboardAvoidingView>
         </Screen>
     );
@@ -271,6 +304,22 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: 24,
         justifyContent: 'center',
+    },
+    webIntro: {
+        marginBottom: 18,
+        backgroundColor: 'transparent',
+    },
+    webTitle: {
+        fontSize: 28,
+        lineHeight: 34,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
+    webBody: {
+        marginTop: 10,
+        fontSize: 15,
+        lineHeight: 24,
+        color: '#64748B',
     },
     header: {
         alignItems: 'center',

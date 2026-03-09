@@ -3,7 +3,7 @@ import { Redirect, Stack, useRouter, useSegments } from 'expo-router';
 import { Home, Users, Settings } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
-import { TouchableOpacity, View, StyleSheet, Text } from 'react-native';
+import { TouchableOpacity, View, StyleSheet, Text, Platform } from 'react-native';
 import { BrandLogo } from '@/components/BrandLogo';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuthStore } from '@/store/authStore';
@@ -43,7 +43,7 @@ export default function TabLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: true,
+        headerShown: Platform.OS !== 'web',
         contentStyle: {
           backgroundColor: 'transparent',
         },

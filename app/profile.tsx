@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Alert, Image, ScrollView, Share, StyleSheet, TextInput, TouchableOpacity, View as RNView, RefreshControl } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Alert, Image, ScrollView, Share, StyleSheet, TextInput, TouchableOpacity, View as RNView, RefreshControl, Platform } from 'react-native';
+import { Redirect, Stack, useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Screen, Card, Text, View } from '@/components/Themed';
 import { useAuthStore } from '@/store/authStore';
@@ -17,6 +17,7 @@ import {
 } from '@/services/profileAvatar';
 import { applyInvitationCode, formatReferralExpiry, getMyInviteSummary, InviteSummary } from '@/services/referrals';
 import { normalizePlanTier } from '@/services/subscriptionPlan';
+import { WebAccountLayout } from '@/components/website/WebAccountLayout';
 
 const isMissingDefaultLanguageColumn = (message?: string) =>
   String(message || '').toLowerCase().includes('default_language');
@@ -24,7 +25,7 @@ const isMissingFriendCodeColumn = (message?: string) =>
   String(message || '').toLowerCase().includes('friend_code');
 
 export default function ProfileScreen() {
-  const { user, planTier, setLanguage, setPlanTier } = useAuthStore();
+  const { user, planTier, initialized, setLanguage, setPlanTier } = useAuthStore();
   const { t } = useI18n();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -364,6 +365,132 @@ export default function ProfileScreen() {
       setRefreshing(false);
     }
   };
+
+  if (Platform.OS === 'web') {
+    if (initialized && !user) {
+      return <Redirect href="/(auth)/login" />;
+    }
+
+    return (
+      <WebAccountLayout
+        eyebrow="Profile"
+        title="Edit identity, defaults, and invite settings."
+        description="These changes update the same Buddy Balance profile record used by the mobile app."
+      >
+        <Card style={styles.webProfileCard}>
+          <RNView style={styles.webAvatarRow}>
+            <RNView style={styles.avatarButton}>
+              {avatarPreviewUrl ? (
+                <Image source={{ uri: avatarPreviewUrl }} style={styles.avatarImage} />
+              ) : (
+                <RNView style={styles.avatarFallback}>
+                  <Text style={styles.avatarFallbackText}>{profileInitial}</Text>
+                </RNView>
+              )}
+            </RNView>
+            <RNView style={styles.webAvatarCopy}>
+              <Text style={styles.webCardTitle}>Profile photo</Text>
+              <Text style={styles.webCardBody}>Use the mobile app if you want to upload or crop a new avatar. Web focuses on account management and profile data.</Text>
+            </RNView>
+          </RNView>
+        </Card>
+
+        <View style={styles.webGrid}>
+          <Card style={styles.webFormCard}>
+            <Text style={styles.webCardTitle}>Identity</Text>
+            <Text style={styles.label}>Full Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('Your full name')}
+              placeholderTextColor="#94A3B8"
+              value={fullName}
+              onChangeText={setFullName}
+            />
+
+            <Text style={styles.label}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="email@example.com"
+              placeholderTextColor="#94A3B8"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
+
+            <Text style={styles.label}>Phone</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="+1 555 555 5555"
+              placeholderTextColor="#94A3B8"
+              keyboardType="phone-pad"
+              value={phone}
+              onChangeText={setPhone}
+            />
+
+            <Text style={styles.label}>Default Currency</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="USD"
+              placeholderTextColor="#94A3B8"
+              value={currencyDefault}
+              onChangeText={setCurrencyDefault}
+            />
+
+            <Text style={styles.label}>Default Language</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="en"
+              placeholderTextColor="#94A3B8"
+              value={defaultLanguage}
+              onChangeText={(value) => setDefaultLanguage(normalizeLanguage(value, getDeviceLanguage()))}
+            />
+
+            <TouchableOpacity style={styles.webPrimaryButton} onPress={() => void handleSave()} disabled={loading || initializing}>
+              <Text style={styles.webPrimaryButtonText}>{loading ? 'Saving...' : 'Save profile'}</Text>
+            </TouchableOpacity>
+          </Card>
+
+          <Card style={styles.webInviteCard}>
+            <Text style={styles.webCardTitle}>Invite and referral</Text>
+            <Text style={styles.webCardBody}>Your invite code links new people to your Buddy Balance network and can unlock referral Premium time.</Text>
+            <Text selectable style={styles.webInviteCode}>{friendCode || 'Setting up...'}</Text>
+            <TouchableOpacity
+              style={[styles.webSecondaryButton, !friendCode && styles.webSecondaryButtonDisabled]}
+              onPress={() => { void handleShareFriendCode(); }}
+              disabled={!friendCode}
+            >
+              <Text style={styles.webSecondaryButtonText}>Share code</Text>
+            </TouchableOpacity>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Enter an invite code"
+              placeholderTextColor="#94A3B8"
+              value={inviteCodeInput}
+              onChangeText={setInviteCodeInput}
+              autoCapitalize="characters"
+            />
+            <TouchableOpacity
+              style={styles.webPrimaryButton}
+              onPress={() => void handleApplyInviteCode()}
+              disabled={applyingInviteCode}
+            >
+              <Text style={styles.webPrimaryButtonText}>{applyingInviteCode ? 'Applying...' : 'Apply invite code'}</Text>
+            </TouchableOpacity>
+
+            {inviteSummary ? (
+              <Text style={styles.webHintText}>
+                {rewardExpiryLabel
+                  ? `Referral Premium active until ${rewardExpiryLabel}.`
+                  : `${inviteSummary.referralCount}/3 successful invite uses earned toward the next free Premium month.`}
+              </Text>
+            ) : null}
+          </Card>
+        </View>
+      </WebAccountLayout>
+    );
+  }
 
   return (
     <Screen style={styles.container} safeAreaEdges={['top', 'left', 'right', 'bottom']}>
@@ -929,6 +1056,91 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: '#FFFFFF',
+  },
+  webProfileCard: {
+    padding: 22,
+  },
+  webAvatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: 'transparent',
+  },
+  webAvatarCopy: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  webGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  webFormCard: {
+    flex: 1,
+    minWidth: 320,
+    padding: 22,
+  },
+  webInviteCard: {
+    width: 340,
+    padding: 22,
+  },
+  webCardTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 10,
+  },
+  webCardBody: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#475569',
+    marginBottom: 14,
+  },
+  webInviteCode: {
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: '900',
+    color: '#4338CA',
+    marginBottom: 14,
+  },
+  webPrimaryButton: {
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: '#4F46E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  webPrimaryButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  webSecondaryButton: {
+    minHeight: 46,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  webSecondaryButtonDisabled: {
+    opacity: 0.45,
+  },
+  webSecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  webHintText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#64748B',
   },
   saveButton: {
     marginTop: 16,

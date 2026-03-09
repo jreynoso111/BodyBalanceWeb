@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View as RNView } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Redirect, Stack, useRouter } from 'expo-router';
 import { ArrowLeft, Lock, Mail, User } from 'lucide-react-native';
 
 import { Card, Screen, Text } from '@/components/Themed';
@@ -10,12 +10,15 @@ import { waitForAuthSession } from '@/services/authSession';
 import { getPasswordPolicyMessage, isStrongPassword } from '@/services/passwordPolicy';
 import { supabase } from '@/services/supabase';
 import { getGoogleOAuthUnavailableReason, isGoogleOAuthEnabledForBuild, signInWithGoogle } from '@/services/oauth';
+import { useAuthStore } from '@/store/authStore';
+import { WebAuthLayout } from '@/components/website/WebAuthLayout';
 
 type FeedbackTone = 'error' | 'success' | 'info';
 type RegisterStep = 'details' | 'verify';
 
 export default function RegisterScreen() {
     const router = useRouter();
+    const { initialized, user } = useAuthStore();
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -28,6 +31,7 @@ export default function RegisterScreen() {
     const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
     const googleEnabledForBuild = isGoogleOAuthEnabledForBuild();
     const googleUnavailableReason = getGoogleOAuthUnavailableReason();
+    const nextRoute = Platform.OS === 'web' ? '/settings' : '/(tabs)';
 
     const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
@@ -36,12 +40,9 @@ export default function RegisterScreen() {
     const showMessage = (title: string, message: string, tone: FeedbackTone) => {
         setFeedback({ tone, text: message });
 
-        if (Platform.OS === 'web' && typeof globalThis.alert === 'function') {
-            globalThis.alert(`${title}\n\n${message}`);
-            return;
+        if (Platform.OS !== 'web') {
+            Alert.alert(title, message);
         }
-
-        Alert.alert(title, message);
     };
 
     const mapAuthError = (message: string) => {
@@ -224,7 +225,7 @@ export default function RegisterScreen() {
             }
 
             showMessage('Account created', 'Email verified. Your account is ready.', 'success');
-            router.replace('/(tabs)');
+            router.replace(nextRoute as never);
         } catch (error: any) {
             showMessage('Verification failed', error?.message || 'Could not verify the code right now.', 'error');
         } finally {
@@ -246,7 +247,7 @@ export default function RegisterScreen() {
             const result = await withTimeout(signInWithGoogle(), 30000);
             if (result.status === 'success') {
                 showMessage('Success', 'Signed in with Google.', 'success');
-                router.replace('/(tabs)');
+                router.replace(nextRoute as never);
                 return;
             }
 
@@ -268,6 +269,183 @@ export default function RegisterScreen() {
         }
     };
 
+    if (Platform.OS === 'web' && initialized && user) {
+        return <Redirect href="/settings" />;
+    }
+
+    const form = (
+        <>
+            {step === 'details' ? (
+                <>
+                    <RNView style={styles.inputGroup}>
+                        <Text style={styles.label}>Full Name</Text>
+                        <RNView style={styles.inputWrapper}>
+                            <User size={18} color="#94A3B8" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="Enter your full name"
+                                placeholderTextColor="#94A3B8"
+                                value={fullName}
+                                onChangeText={setFullName}
+                                autoCapitalize="words"
+                                style={styles.input}
+                            />
+                        </RNView>
+                    </RNView>
+
+                    <RNView style={styles.inputGroup}>
+                        <Text style={styles.label}>Email Address</Text>
+                        <RNView style={styles.inputWrapper}>
+                            <Mail size={18} color="#94A3B8" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="Enter your email"
+                                placeholderTextColor="#94A3B8"
+                                value={email}
+                                onChangeText={setEmail}
+                                autoCapitalize="none"
+                                keyboardType="email-address"
+                                style={styles.input}
+                            />
+                        </RNView>
+                    </RNView>
+
+                    <RNView style={styles.inputGroup}>
+                        <Text style={styles.label}>Password</Text>
+                        <RNView style={styles.inputWrapper}>
+                            <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="At least 10 chars, mixed case, and number"
+                                placeholderTextColor="#94A3B8"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry
+                                style={styles.input}
+                            />
+                        </RNView>
+                    </RNView>
+
+                    <RNView style={styles.inputGroup}>
+                        <Text style={styles.label}>Confirm Password</Text>
+                        <RNView style={styles.inputWrapper}>
+                            <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="Repeat your password"
+                                placeholderTextColor="#94A3B8"
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                                secureTextEntry
+                                style={styles.input}
+                            />
+                        </RNView>
+                    </RNView>
+
+                    <TouchableOpacity
+                        onPress={sendVerificationCode}
+                        disabled={busy}
+                        style={[styles.primaryButton, busy && { opacity: 0.75 }]}
+                    >
+                        <Text style={styles.buttonText}>{loading ? 'SENDING CODE...' : 'Send Verification Code'}</Text>
+                    </TouchableOpacity>
+                </>
+            ) : (
+                <>
+                    <RNView style={styles.inputGroup}>
+                        <Text style={styles.label}>Verification Code</Text>
+                        <RNView style={styles.inputWrapper}>
+                            <Mail size={18} color="#94A3B8" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="Enter 6-digit code"
+                                placeholderTextColor="#94A3B8"
+                                value={verificationCode}
+                                onChangeText={setVerificationCode}
+                                autoCapitalize="none"
+                                keyboardType="number-pad"
+                                style={styles.input}
+                                maxLength={6}
+                            />
+                        </RNView>
+                    </RNView>
+
+                    <TouchableOpacity
+                        onPress={verifyEmailCode}
+                        disabled={busy}
+                        style={[styles.primaryButton, busy && { opacity: 0.75 }]}
+                    >
+                        <Text style={styles.buttonText}>{verifyingCode ? 'VERIFYING...' : 'Verify Code & Create Account'}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={sendVerificationCode}
+                        disabled={busy}
+                        style={styles.secondaryButton}
+                    >
+                        <Text style={styles.secondaryButtonText}>{loading ? 'SENDING...' : 'Resend code'}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        onPress={() => setStep('details')}
+                        disabled={busy}
+                        style={styles.secondaryButton}
+                    >
+                        <Text style={styles.secondaryButtonText}>Edit registration details</Text>
+                    </TouchableOpacity>
+                </>
+            )}
+
+            {googleEnabledForBuild ? (
+                <>
+                    <TouchableOpacity
+                        onPress={onContinueWithGoogle}
+                        disabled={busy}
+                        style={[
+                            styles.googleButton,
+                            busy && styles.googleButtonDisabled,
+                            googleUnavailableReason && styles.googleButtonUnavailable,
+                        ]}
+                    >
+                        <GoogleLogo />
+                        <Text style={styles.googleButtonText}>
+                            {googleLoading
+                                ? 'CONNECTING TO GOOGLE...'
+                                : googleUnavailableReason
+                                    ? 'Google Sign In Requires App Build'
+                                    : 'Continue with Google'}
+                        </Text>
+                    </TouchableOpacity>
+
+                    {googleUnavailableReason ? (
+                        <Text style={styles.googleHintText}>{googleUnavailableReason}</Text>
+                    ) : null}
+                </>
+            ) : null}
+
+            <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.secondaryButton} disabled={busy}>
+                <Text style={styles.secondaryButtonText}>Already have an account? Sign In</Text>
+            </TouchableOpacity>
+
+            {feedback ? (
+                <RNView
+                    style={[
+                        styles.feedbackBox,
+                        feedback.tone === 'error' && styles.feedbackError,
+                        feedback.tone === 'success' && styles.feedbackSuccess,
+                        feedback.tone === 'info' && styles.feedbackInfo,
+                    ]}
+                >
+                    <Text
+                        style={[
+                            styles.feedbackText,
+                            feedback.tone === 'error' && styles.feedbackTextError,
+                            feedback.tone === 'success' && styles.feedbackTextSuccess,
+                            feedback.tone === 'info' && styles.feedbackTextInfo,
+                        ]}
+                    >
+                        {feedback.text}
+                    </Text>
+                </RNView>
+            ) : null}
+        </>
+    );
+
     return (
         <Screen style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -275,6 +453,30 @@ export default function RegisterScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
+                {Platform.OS === 'web' ? (
+                    <WebAuthLayout
+                        eyebrow="Create account"
+                        title="Create a Buddy Balance account that works on mobile and web."
+                        description="Start with email verification, then manage profile details, membership, security, and support from the browser with the same account."
+                        highlights={[
+                            'Same sign-in as the app',
+                            'Email code verification',
+                            'Profile and referral setup',
+                            'Membership and support access',
+                        ]}
+                        altAction={{ href: '/(auth)/login', label: 'Back to sign in' }}
+                    >
+                        <RNView style={styles.webIntro}>
+                            <Text style={styles.webTitle}>{step === 'details' ? 'Create your account' : 'Verify your email'}</Text>
+                            <Text style={styles.webBody}>
+                                {step === 'details'
+                                    ? 'Set up your account credentials first. Buddy Balance will send a short verification code before final activation.'
+                                    : 'Enter the six-digit code from your inbox to finish the account setup and unlock the web account center.'}
+                            </Text>
+                        </RNView>
+                        <Card style={styles.authCard}>{form}</Card>
+                    </WebAuthLayout>
+                ) : (
                 <RNView style={styles.content}>
                     <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backButton}>
                         <ArrowLeft size={20} color="#0F172A" />
@@ -286,177 +488,9 @@ export default function RegisterScreen() {
                         <Text style={styles.subtitle}>Create your account</Text>
                     </RNView>
 
-                    <Card style={styles.authCard}>
-                        {step === 'details' ? (
-                            <>
-                                <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>Full Name</Text>
-                                    <RNView style={styles.inputWrapper}>
-                                        <User size={18} color="#94A3B8" style={styles.inputIcon} />
-                                        <TextInput
-                                            placeholder="Enter your full name"
-                                            placeholderTextColor="#94A3B8"
-                                            value={fullName}
-                                            onChangeText={setFullName}
-                                            autoCapitalize="words"
-                                            style={styles.input}
-                                        />
-                                    </RNView>
-                                </RNView>
-
-                                <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>Email Address</Text>
-                                    <RNView style={styles.inputWrapper}>
-                                        <Mail size={18} color="#94A3B8" style={styles.inputIcon} />
-                                        <TextInput
-                                            placeholder="Enter your email"
-                                            placeholderTextColor="#94A3B8"
-                                            value={email}
-                                            onChangeText={setEmail}
-                                            autoCapitalize="none"
-                                            keyboardType="email-address"
-                                            style={styles.input}
-                                        />
-                                    </RNView>
-                                </RNView>
-
-                                <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>Password</Text>
-                                    <RNView style={styles.inputWrapper}>
-                                        <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
-                                        <TextInput
-                                            placeholder="At least 10 chars, mixed case, and number"
-                                            placeholderTextColor="#94A3B8"
-                                            value={password}
-                                            onChangeText={setPassword}
-                                            secureTextEntry
-                                            style={styles.input}
-                                        />
-                                    </RNView>
-                                </RNView>
-
-                                <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>Confirm Password</Text>
-                                    <RNView style={styles.inputWrapper}>
-                                        <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
-                                        <TextInput
-                                            placeholder="Repeat your password"
-                                            placeholderTextColor="#94A3B8"
-                                            value={confirmPassword}
-                                            onChangeText={setConfirmPassword}
-                                            secureTextEntry
-                                            style={styles.input}
-                                        />
-                                    </RNView>
-                                </RNView>
-
-                                <TouchableOpacity
-                                    onPress={sendVerificationCode}
-                                    disabled={busy}
-                                    style={[styles.primaryButton, busy && { opacity: 0.75 }]}
-                                >
-                                    <Text style={styles.buttonText}>{loading ? 'SENDING CODE...' : 'Send Verification Code'}</Text>
-                                </TouchableOpacity>
-                            </>
-                        ) : (
-                            <>
-                                <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>Verification Code</Text>
-                                    <RNView style={styles.inputWrapper}>
-                                        <Mail size={18} color="#94A3B8" style={styles.inputIcon} />
-                                        <TextInput
-                                            placeholder="Enter 6-digit code"
-                                            placeholderTextColor="#94A3B8"
-                                            value={verificationCode}
-                                            onChangeText={setVerificationCode}
-                                            autoCapitalize="none"
-                                            keyboardType="number-pad"
-                                            style={styles.input}
-                                            maxLength={6}
-                                        />
-                                    </RNView>
-                                </RNView>
-
-                                <TouchableOpacity
-                                    onPress={verifyEmailCode}
-                                    disabled={busy}
-                                    style={[styles.primaryButton, busy && { opacity: 0.75 }]}
-                                >
-                                    <Text style={styles.buttonText}>{verifyingCode ? 'VERIFYING...' : 'Verify Code & Create Account'}</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    onPress={sendVerificationCode}
-                                    disabled={busy}
-                                    style={styles.secondaryButton}
-                                >
-                                    <Text style={styles.secondaryButtonText}>{loading ? 'SENDING...' : 'Resend code'}</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    onPress={() => setStep('details')}
-                                    disabled={busy}
-                                    style={styles.secondaryButton}
-                                >
-                                    <Text style={styles.secondaryButtonText}>Edit registration details</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
-
-                        {googleEnabledForBuild ? (
-                            <>
-                                <TouchableOpacity
-                                    onPress={onContinueWithGoogle}
-                                    disabled={busy}
-                                    style={[
-                                        styles.googleButton,
-                                        busy && styles.googleButtonDisabled,
-                                        googleUnavailableReason && styles.googleButtonUnavailable,
-                                    ]}
-                                >
-                                    <GoogleLogo />
-                                    <Text style={styles.googleButtonText}>
-                                        {googleLoading
-                                            ? 'CONNECTING TO GOOGLE...'
-                                            : googleUnavailableReason
-                                                ? 'Google Sign In Requires App Build'
-                                                : 'Continue with Google'}
-                                    </Text>
-                                </TouchableOpacity>
-
-                                {googleUnavailableReason ? (
-                                    <Text style={styles.googleHintText}>{googleUnavailableReason}</Text>
-                                ) : null}
-                            </>
-                        ) : null}
-
-                        <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.secondaryButton} disabled={busy}>
-                            <Text style={styles.secondaryButtonText}>Already have an account? Sign In</Text>
-                        </TouchableOpacity>
-
-                        {feedback ? (
-                            <RNView
-                                style={[
-                                    styles.feedbackBox,
-                                    feedback.tone === 'error' && styles.feedbackError,
-                                    feedback.tone === 'success' && styles.feedbackSuccess,
-                                    feedback.tone === 'info' && styles.feedbackInfo,
-                                ]}
-                            >
-                                <Text
-                                    style={[
-                                        styles.feedbackText,
-                                        feedback.tone === 'error' && styles.feedbackTextError,
-                                        feedback.tone === 'success' && styles.feedbackTextSuccess,
-                                        feedback.tone === 'info' && styles.feedbackTextInfo,
-                                    ]}
-                                >
-                                    {feedback.text}
-                                </Text>
-                            </RNView>
-                        ) : null}
-                    </Card>
+                    <Card style={styles.authCard}>{form}</Card>
                 </RNView>
+                )}
             </KeyboardAvoidingView>
         </Screen>
     );
@@ -470,6 +504,22 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: 24,
         justifyContent: 'center',
+    },
+    webIntro: {
+        marginBottom: 18,
+        backgroundColor: 'transparent',
+    },
+    webTitle: {
+        fontSize: 28,
+        lineHeight: 34,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
+    webBody: {
+        marginTop: 10,
+        fontSize: 15,
+        lineHeight: 24,
+        color: '#64748B',
     },
     backButton: {
         flexDirection: 'row',

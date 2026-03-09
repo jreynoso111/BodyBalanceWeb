@@ -7,6 +7,7 @@ import { Lock, ArrowLeft } from 'lucide-react-native';
 import { Text, Screen, Card } from '@/components/Themed';
 import { getPasswordPolicyMessage, isStrongPassword } from '@/services/passwordPolicy';
 import { supabase } from '@/services/supabase';
+import { WebAuthLayout } from '@/components/website/WebAuthLayout';
 
 type RecoveryTokens = {
     accessToken: string | null;
@@ -35,6 +36,14 @@ export default function ResetPasswordScreen() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [initializing, setInitializing] = useState(true);
+    const [feedback, setFeedback] = useState<{ tone: 'error' | 'success' | 'info'; text: string } | null>(null);
+
+    const showMessage = (title: string, message: string, tone: 'error' | 'success' | 'info') => {
+        setFeedback({ tone, text: message });
+        if (Platform.OS !== 'web') {
+            Alert.alert(title, message);
+        }
+    };
 
     const initializeRecoverySession = useCallback(async () => {
         try {
@@ -57,7 +66,7 @@ export default function ResetPasswordScreen() {
                 if (error) throw error;
             }
         } catch {
-            Alert.alert('Error', 'The recovery link is invalid or expired.');
+            showMessage('Error', 'The recovery link is invalid or expired.', 'error');
         } finally {
             setInitializing(false);
         }
@@ -69,31 +78,108 @@ export default function ResetPasswordScreen() {
 
     const onUpdatePassword = async () => {
         if (!password || !confirmPassword) {
-            Alert.alert('Error', 'Please complete both fields.');
+            showMessage('Error', 'Please complete both fields.', 'error');
             return;
         }
         if (!isStrongPassword(password)) {
-            Alert.alert('Error', getPasswordPolicyMessage());
+            showMessage('Error', getPasswordPolicyMessage(), 'error');
             return;
         }
         if (password !== confirmPassword) {
-            Alert.alert('Error', 'Passwords do not match.');
+            showMessage('Error', 'Passwords do not match.', 'error');
             return;
         }
 
         setLoading(true);
+        setFeedback(null);
         const { error } = await supabase.auth.updateUser({ password });
         setLoading(false);
 
         if (error) {
-            Alert.alert('Error', 'Could not update password. Request a new reset link.');
+            showMessage('Error', 'Could not update password. Request a new reset link.', 'error');
             return;
         }
 
         await supabase.auth.signOut();
-        Alert.alert('Done', 'Password updated. Sign in with your new password.');
+        showMessage('Done', 'Password updated. Sign in with your new password.', 'success');
         router.replace('/(auth)/login');
     };
+
+    const form = (
+        <Card style={styles.card}>
+            <Text style={styles.title}>New password</Text>
+            <Text style={styles.subtitle}>Set a new password for your account.</Text>
+
+            {initializing ? (
+                <RNView style={styles.loadingBox}>
+                    <ActivityIndicator size="small" color="#6366F1" />
+                    <Text style={styles.loadingText}>Validating link...</Text>
+                </RNView>
+            ) : (
+                <>
+                    <RNView style={styles.inputGroup}>
+                        <Text style={styles.label}>New password</Text>
+                        <RNView style={styles.inputWrapper}>
+                            <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="At least 10 chars, mixed case, and number"
+                                placeholderTextColor="#94A3B8"
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry
+                                style={styles.input}
+                            />
+                        </RNView>
+                    </RNView>
+
+                    <RNView style={styles.inputGroup}>
+                        <Text style={styles.label}>Confirm password</Text>
+                        <RNView style={styles.inputWrapper}>
+                            <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
+                            <TextInput
+                                placeholder="Repeat your password"
+                                placeholderTextColor="#94A3B8"
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                                secureTextEntry
+                                style={styles.input}
+                            />
+                        </RNView>
+                    </RNView>
+
+                    <TouchableOpacity
+                        onPress={onUpdatePassword}
+                        disabled={loading}
+                        style={[styles.primaryButton, loading && { opacity: 0.7 }]}
+                    >
+                        <Text style={styles.buttonText}>{loading ? 'UPDATING...' : 'Update password'}</Text>
+                    </TouchableOpacity>
+                </>
+            )}
+
+            {feedback ? (
+                <RNView
+                    style={[
+                        styles.feedbackBox,
+                        feedback.tone === 'error' && styles.feedbackError,
+                        feedback.tone === 'success' && styles.feedbackSuccess,
+                        feedback.tone === 'info' && styles.feedbackInfo,
+                    ]}
+                >
+                    <Text
+                        style={[
+                            styles.feedbackText,
+                            feedback.tone === 'error' && styles.feedbackTextError,
+                            feedback.tone === 'success' && styles.feedbackTextSuccess,
+                            feedback.tone === 'info' && styles.feedbackTextInfo,
+                        ]}
+                    >
+                        {feedback.text}
+                    </Text>
+                </RNView>
+            ) : null}
+        </Card>
+    );
 
     return (
         <Screen style={styles.container}>
@@ -102,64 +188,36 @@ export default function ResetPasswordScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
+                {Platform.OS === 'web' ? (
+                    <WebAuthLayout
+                        eyebrow="Set new password"
+                        title="Finish recovery and set a new Buddy Balance password."
+                        description="This page completes the same secure recovery flow used by the mobile app. Once updated, the new password works everywhere."
+                        highlights={[
+                            'Recovery link validation',
+                            'Same password rules as mobile',
+                            'Session reset after change',
+                            'Use the new password on web and app',
+                        ]}
+                        altAction={{ href: '/(auth)/login', label: 'Back to sign in' }}
+                    >
+                        <RNView style={styles.webIntro}>
+                            <Text style={styles.webTitle}>Choose a new password</Text>
+                            <Text style={styles.webBody}>
+                                Use a strong password that meets the current policy. After the update, sign back in with the new password.
+                            </Text>
+                        </RNView>
+                        {form}
+                    </WebAuthLayout>
+                ) : (
                 <RNView style={styles.content}>
                     <TouchableOpacity onPress={() => router.replace('/(auth)/login')} style={styles.backButton}>
                         <ArrowLeft size={20} color="#0F172A" />
                         <Text style={styles.backText}>Back to login</Text>
                     </TouchableOpacity>
-
-                    <Card style={styles.card}>
-                        <Text style={styles.title}>New password</Text>
-                        <Text style={styles.subtitle}>Set a new password for your account.</Text>
-
-                        {initializing ? (
-                            <RNView style={styles.loadingBox}>
-                                <ActivityIndicator size="small" color="#6366F1" />
-                                <Text style={styles.loadingText}>Validating link...</Text>
-                            </RNView>
-                        ) : (
-                            <>
-                                <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>New password</Text>
-                                    <RNView style={styles.inputWrapper}>
-                                        <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
-                                        <TextInput
-                                            placeholder="At least 10 chars, mixed case, and number"
-                                            placeholderTextColor="#94A3B8"
-                                            value={password}
-                                            onChangeText={setPassword}
-                                            secureTextEntry
-                                            style={styles.input}
-                                        />
-                                    </RNView>
-                                </RNView>
-
-                                <RNView style={styles.inputGroup}>
-                                    <Text style={styles.label}>Confirm password</Text>
-                                    <RNView style={styles.inputWrapper}>
-                                        <Lock size={18} color="#94A3B8" style={styles.inputIcon} />
-                                        <TextInput
-                                            placeholder="Repeat your password"
-                                            placeholderTextColor="#94A3B8"
-                                            value={confirmPassword}
-                                            onChangeText={setConfirmPassword}
-                                            secureTextEntry
-                                            style={styles.input}
-                                        />
-                                    </RNView>
-                                </RNView>
-
-                                <TouchableOpacity
-                                    onPress={onUpdatePassword}
-                                    disabled={loading}
-                                    style={[styles.primaryButton, loading && { opacity: 0.7 }]}
-                                >
-                                    <Text style={styles.buttonText}>{loading ? 'UPDATING...' : 'Update password'}</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
-                    </Card>
+                    {form}
                 </RNView>
+                )}
             </KeyboardAvoidingView>
         </Screen>
     );
@@ -173,6 +231,22 @@ const styles = StyleSheet.create({
         flex: 1,
         padding: 24,
         justifyContent: 'center',
+    },
+    webIntro: {
+        marginBottom: 18,
+        backgroundColor: 'transparent',
+    },
+    webTitle: {
+        fontSize: 28,
+        lineHeight: 34,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
+    webBody: {
+        marginTop: 10,
+        fontSize: 15,
+        lineHeight: 24,
+        color: '#64748B',
     },
     backButton: {
         flexDirection: 'row',
@@ -252,5 +326,37 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '800',
         letterSpacing: 0.5,
+    },
+    feedbackBox: {
+        marginTop: 12,
+        borderRadius: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderWidth: 1,
+    },
+    feedbackError: {
+        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+        borderColor: 'rgba(239, 68, 68, 0.24)',
+    },
+    feedbackSuccess: {
+        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+        borderColor: 'rgba(16, 185, 129, 0.24)',
+    },
+    feedbackInfo: {
+        backgroundColor: 'rgba(99, 102, 241, 0.08)',
+        borderColor: 'rgba(99, 102, 241, 0.24)',
+    },
+    feedbackText: {
+        fontSize: 13,
+        fontWeight: '600',
+    },
+    feedbackTextError: {
+        color: '#B91C1C',
+    },
+    feedbackTextSuccess: {
+        color: '#047857',
+    },
+    feedbackTextInfo: {
+        color: '#4338CA',
     },
 });
