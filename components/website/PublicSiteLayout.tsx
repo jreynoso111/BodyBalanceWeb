@@ -27,12 +27,13 @@ type PublicSiteLayoutProps = {
   children: React.ReactNode;
 };
 
-const NAV_ITEMS: { href: Href; path: string; label: string }[] = [
-  { href: '/', path: '/', label: 'Home' },
-  { href: '/faq', path: '/faq', label: 'FAQ' },
-  { href: '/help-support', path: '/help-support', label: 'Support' },
-  { href: '/privacy', path: '/privacy', label: 'Privacy' },
-  { href: '/terms', path: '/terms', label: 'Terms' },
+const NAV_ITEMS: { href: Href; label: string; matches: string[] }[] = [
+  { href: '/', label: 'Home', matches: ['/'] },
+  {
+    href: '/help-support',
+    label: 'Support',
+    matches: ['/help-support', '/faq', '/privacy', '/terms', '/contact'],
+  },
 ];
 
 const SIGNALS = [
@@ -42,9 +43,11 @@ const SIGNALS = [
   'Premium exports',
 ];
 
-function isActivePath(currentPath: string, href: string) {
-  if (href === '/') return currentPath === '/';
-  return currentPath === href || currentPath.startsWith(`${href}/`);
+function isActivePath(currentPath: string, matches: string[]) {
+  return matches.some((href) => {
+    if (href === '/') return currentPath === '/';
+    return currentPath === href || currentPath.startsWith(`${href}/`);
+  });
 }
 
 export function PublicSiteLayout({
@@ -96,10 +99,10 @@ export function PublicSiteLayout({
 
           <View style={[styles.nav, compact && styles.navCompact, mobile && styles.navMobile]}>
             {NAV_ITEMS.map((item) => {
-              const active = isActivePath(pathname, item.path);
+              const active = isActivePath(pathname, item.matches);
               return (
                 <Link
-                  key={item.path}
+                  key={item.label}
                   href={item.href}
                   style={[styles.navLink, mobile && styles.navLinkMobile, active ? styles.navLinkActive : null]}
                 >

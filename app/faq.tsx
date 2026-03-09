@@ -71,12 +71,12 @@ export default function FAQScreen() {
   if (Platform.OS === 'web') {
     return (
       <PublicSiteLayout
-        eyebrow="FAQ"
-        title="Questions people ask before and after using Buddy Balance."
+        eyebrow="Support / FAQ"
+        title="FAQ is the fast-answer branch of the Buddy Balance support section."
         description="These answers reflect the current product behavior around records, contacts, notifications, shared history, Premium, and account support."
         actions={[
-          { href: '/help-support', label: 'Need support?' },
-          { href: '/privacy', label: 'Privacy Policy', variant: 'secondary' },
+          { href: '/help-support', label: 'Back to Support' },
+          { href: '/contact', label: 'Contact support', variant: 'secondary' },
         ]}
       >
         <View style={styles.webFaqList}>

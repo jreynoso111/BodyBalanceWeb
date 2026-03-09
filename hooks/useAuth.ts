@@ -19,6 +19,7 @@ const NON_RECOVERABLE_PATH_PREFIXES = [
     '/profile',
 ];
 const PUBLIC_PATH_PREFIXES = [
+    '/contact',
     '/faq',
     '/help-support',
     '/help/',

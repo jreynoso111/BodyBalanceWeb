@@ -33,7 +33,7 @@ export default function LandingPage() {
                 description="Buddy Balance turns informal lending into something readable: shared balances, friend-linked records, notifications that make sense, and premium export tools wrapped in a warm mobile-first interface."
                 actions={[
                     { href: '/help-support', label: 'Explore the product' },
-                    { href: '/faq', label: 'Read the FAQ', variant: 'secondary' },
+                    { href: '/contact', label: 'Visit support', variant: 'secondary' },
                 ]}
                 heroVisual={<AppShowcase />}
             >
