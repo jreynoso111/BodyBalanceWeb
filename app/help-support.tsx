@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View as RNView } from 'react-native';
-import { Link, Stack, useRouter } from 'expo-router';
+import { Link, Stack, useRouter, type Href } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -13,7 +13,9 @@ import {
 } from 'lucide-react-native';
 import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { PublicContactForm } from '@/components/support/PublicContactForm';
+import { SupportMessageCard } from '@/components/support/SupportMessageCard';
 import { PublicCard, PublicSiteLayout } from '@/components/website/PublicSiteLayout';
+import { useAuthStore } from '@/store/authStore';
 
 type QuickGuideItem = {
   icon: React.ComponentType<{ size?: number; color?: string }>;
@@ -63,25 +65,25 @@ const QUICK_GUIDES: QuickGuideItem[] = [
 
 const SUPPORT_DESTINATIONS = [
   {
-    href: '/faq' as const,
+    href: '/faq' as Href,
     eyebrow: 'ANSWERS',
     title: 'FAQ',
     body: 'Short, product-facing explanations for balances, shared records, notifications, contacts, and Premium behavior.',
   },
   {
-    href: '/contact' as const,
+    href: '/contact' as Href,
     eyebrow: 'CONTACT',
     title: 'Contact support',
     body: 'The right place for account-specific issues, launch questions, and guidance on what should be handled in-app.',
   },
   {
-    href: '/privacy' as const,
+    href: '/privacy' as Href,
     eyebrow: 'POLICY',
     title: 'Privacy',
     body: 'How Buddy Balance handles account data, shared history, and the information that becomes visible across linked activity.',
   },
   {
-    href: '/terms' as const,
+    href: '/terms' as Href,
     eyebrow: 'LEGAL',
     title: 'Terms',
     body: 'The usage rules, product limits, and responsibilities around a ledger app that does not move money itself.',
@@ -90,6 +92,7 @@ const SUPPORT_DESTINATIONS = [
 
 export default function HelpSupportScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
 
   if (Platform.OS === 'web') {
     return (
@@ -141,7 +144,7 @@ export default function HelpSupportScreen() {
 
         <RNView style={styles.supportDestinationGrid}>
           {SUPPORT_DESTINATIONS.map((item) => (
-            <Link key={item.href} href={item.href} style={styles.supportDestinationLink}>
+            <Link key={item.title} href={item.href} style={styles.supportDestinationLink}>
               <LinearGradient colors={['rgba(255,255,255,0.96)', 'rgba(255,255,255,0.74)']} style={styles.supportDestinationCard}>
                 <Text style={styles.supportDestinationEyebrow}>{item.eyebrow}</Text>
                 <Text style={styles.supportDestinationTitle}>{item.title}</Text>
@@ -305,6 +308,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 370,
     flexGrow: 1,
+  },
+  supportDestinationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    backgroundColor: 'transparent',
   },
   supportDestinationCard: {
     minHeight: 210,

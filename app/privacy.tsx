@@ -1,6 +1,6 @@
 import React from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, type Href } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PublicSiteLayout } from '@/components/website/PublicSiteLayout';
@@ -63,7 +63,7 @@ export default function PrivacyPolicyScreen() {
         description="Buddy Balance is built around shared activity between connected people, so this policy explains both the personal data you provide and the event history that can become visible to other participants."
         actions={[
           { href: '/help-support', label: 'Back to Support' },
-          { href: '/contact', label: 'Contact support', variant: 'secondary' },
+          { href: '/contact' as Href, label: 'Contact support', variant: 'secondary' },
         ]}
       >
         <LinearGradient colors={['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.74)']} style={styles.summaryPanel}>

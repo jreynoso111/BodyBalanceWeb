@@ -1,6 +1,6 @@
 import React from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, type Href } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PublicSiteLayout } from '@/components/website/PublicSiteLayout';
@@ -73,7 +73,7 @@ export default function TermsOfServiceScreen() {
         description="Buddy Balance is a shared tracking tool. It helps people record loans, payments, returns, and related activity, but it does not replace the real-world responsibility between the people involved."
         actions={[
           { href: '/help-support', label: 'Back to Support' },
-          { href: '/contact', label: 'Contact support', variant: 'secondary' },
+          { href: '/contact' as Href, label: 'Contact support', variant: 'secondary' },
         ]}
       >
         <LinearGradient colors={['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.74)']} style={styles.summaryPanel}>

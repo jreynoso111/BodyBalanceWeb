@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, usePathname, type Href } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   View,
@@ -59,8 +60,15 @@ export function PublicSiteLayout({
   heroVisual,
   children,
 }: PublicSiteLayoutProps) {
+  const { width } = useWindowDimensions();
   const pathname = usePathname() || '/';
   const user = useAuthStore((state) => state.user);
+  const mobile = width < 640;
+  const tablet = width < 900;
+  const compact = width < 1080;
+  const contentPadding = mobile ? 14 : tablet ? 18 : 22;
+  const heroTitleSize = mobile ? 36 : compact ? 46 : 54;
+  const heroTitleLineHeight = mobile ? 40 : compact ? 50 : 58;
 
   return (
     <ScrollView
@@ -378,6 +386,27 @@ const styles = StyleSheet.create({
   },
   accountLabelActive: {
     color: '#FFFFFF',
+  },
+  heroShell: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 18,
+  },
+  heroShellCompact: {
+    flexDirection: 'column',
+  },
+  heroPanel: {
+    flex: 1,
+    marginTop: 28,
+    padding: 28,
+    borderRadius: 34,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+    shadowColor: '#312E81',
+    shadowOffset: { width: 0, height: 24 },
+    shadowOpacity: 0.16,
+    shadowRadius: 34,
+    elevation: 14,
   },
   hero: {
     marginTop: 28,

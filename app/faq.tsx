@@ -1,6 +1,6 @@
 import React from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, type Href } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
 import { PublicSiteLayout } from '@/components/website/PublicSiteLayout';
 
@@ -76,7 +76,7 @@ export default function FAQScreen() {
         description="These answers reflect the current product behavior around records, contacts, notifications, shared history, Premium, and account support."
         actions={[
           { href: '/help-support', label: 'Back to Support' },
-          { href: '/contact', label: 'Contact support', variant: 'secondary' },
+          { href: '/contact' as Href, label: 'Contact support', variant: 'secondary' },
         ]}
       >
         <View style={styles.webFaqList}>

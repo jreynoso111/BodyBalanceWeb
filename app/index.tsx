@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, Pressable, Dimensions, Platform, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import {
     ArrowRight,
@@ -83,7 +83,7 @@ export default function LandingPage() {
                 description="Buddy Balance turns informal lending into something readable: shared balances, friend-linked records, notifications that make sense, and premium export tools wrapped in a warm mobile-first interface."
                 actions={[
                     { href: '/help-support', label: 'Explore the product' },
-                    { href: '/contact', label: 'Visit support', variant: 'secondary' },
+                    { href: '/contact' as Href, label: 'Visit support', variant: 'secondary' },
                 ]}
                 heroVisual={<AppShowcase />}
             >
@@ -744,6 +744,45 @@ const styles = StyleSheet.create({
     },
     webHighlights: {
         gap: 16,
+    },
+    webFeatureCard: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 16,
+        padding: 22,
+        borderRadius: 28,
+        backgroundColor: 'rgba(255,255,255,0.94)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.72)',
+        shadowColor: '#312E81',
+        shadowOffset: { width: 0, height: 18 },
+        shadowOpacity: 0.1,
+        shadowRadius: 26,
+        elevation: 10,
+    },
+    webFeatureIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 16,
+        backgroundColor: '#EEF2FF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    webFeatureCopy: {
+        flex: 1,
+        backgroundColor: 'transparent',
+    },
+    webFeatureTitle: {
+        fontSize: 22,
+        lineHeight: 28,
+        fontWeight: '900',
+        color: '#0F172A',
+    },
+    webFeatureText: {
+        marginTop: 8,
+        fontSize: 15,
+        lineHeight: 24,
+        color: '#475569',
     },
     webFeatureBullet: {
         flexDirection: 'row',
