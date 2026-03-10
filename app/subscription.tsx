@@ -10,10 +10,29 @@ import {
   isBillingAvailable,
   purchasePremiumPackage,
 } from '@/services/billing';
+import { fetchMyMembershipDetails, type MembershipDetails } from '@/services/profileService';
 import { PLAN_LIMITS } from '@/services/subscriptionPlan';
 import { formatReferralExpiry, getMyInviteSummary, InviteSummary } from '@/services/referrals';
 import { useAuthStore } from '@/store/authStore';
 import { WebAccountLayout } from '@/components/website/WebAccountLayout';
+
+function formatMembershipDate(value?: string | null) {
+  if (!value) return 'Not available yet';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not available yet';
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getMembershipSourceLabel(source?: MembershipDetails['grantedSource']) {
+  if (source === 'referral') return 'Referral reward';
+  if (source === 'purchase') return 'Direct purchase';
+  if (source === 'admin') return 'Admin granted';
+  return 'Not recorded yet';
+}
 
 export default function SubscriptionScreen() {
   const planTier = useAuthStore((state) => state.planTier);
@@ -25,6 +44,7 @@ export default function SubscriptionScreen() {
   const [inviteEmail, setInviteEmail] = React.useState('');
   const [sendingInvite, setSendingInvite] = React.useState(false);
   const [referralSummary, setReferralSummary] = React.useState<InviteSummary | null>(null);
+  const [membershipDetails, setMembershipDetails] = React.useState<MembershipDetails | null>(null);
 
   React.useEffect(() => {
     if (!user?.id) return;
@@ -32,9 +52,13 @@ export default function SubscriptionScreen() {
     let active = true;
 
     const loadReferralSummary = async () => {
-      const { data } = await getMyInviteSummary();
-      if (!active || !data) return;
-      setReferralSummary(data);
+      const [{ data }, membership] = await Promise.all([
+        getMyInviteSummary(),
+        fetchMyMembershipDetails(user.id).catch(() => null),
+      ]);
+      if (!active) return;
+      setReferralSummary(data || null);
+      setMembershipDetails(membership);
     };
 
     void loadReferralSummary();
@@ -108,6 +132,18 @@ export default function SubscriptionScreen() {
     }
   };
 
+  const membershipStartedLabel = formatMembershipDate(membershipDetails?.grantedAt);
+  const membershipExpiryLabel = formatReferralExpiry(membershipDetails?.premiumReferralExpiresAt);
+  const membershipSourceLabel = getMembershipSourceLabel(membershipDetails?.grantedSource);
+  const membershipSourceDetail =
+    membershipDetails?.grantedSource === 'referral' && referralSummary
+      ? `${referralSummary.referralCount} successful invite uses recorded`
+      : membershipDetails?.grantedSource === 'purchase'
+        ? 'Premium access came from a successful checkout'
+        : membershipDetails?.grantedSource === 'admin'
+          ? 'Premium access was enabled manually by an administrator'
+          : 'This account is Premium, but the source metadata is not available yet.';
+
   if (Platform.OS === 'web') {
     if (initialized && !user) {
       return <Redirect href="/(auth)/login" />;
@@ -121,26 +157,44 @@ export default function SubscriptionScreen() {
         >
           <RNView style={styles.webGrid}>
             <Card style={styles.webPanel}>
-              <Text style={styles.webPanelTitle}>{planTier === 'premium' ? 'Current plan' : 'Upgrade plan'}</Text>
+              <Text style={styles.webPanelTitle}>{planTier === 'premium' ? 'Membership details' : 'Upgrade plan'}</Text>
               <Text style={styles.webPlanValue}>{planTitle}</Text>
               <Text style={styles.webBody}>
                 {planTier === 'premium'
-                  ? 'Premium is already active on this account, so exports and unlimited record limits are ready to use.'
+                  ? 'Premium is already active on this account. This section now shows how the membership was granted and whether it has an expiration date.'
                   : 'Use this Membership section to move the account from Free to Premium. Checkout still depends on the billing flow available for the device.'}
               </Text>
-              {planTier !== 'premium' ? (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  style={[styles.webPrimaryButton, purchasePending && styles.buttonDisabled]}
-                  onPress={() => void handlePurchase()}
-                  disabled={purchasePending}
-                >
-                  {purchasePending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.webPrimaryButtonText}>Buy Premium</Text>}
-                </TouchableOpacity>
-              ) : null}
-              <Text style={styles.webMembershipNote}>
-                {unavailableReason || 'Premium checkout is available on this device.'}
-              </Text>
+              {planTier === 'premium' ? (
+                <RNView style={styles.membershipDetailStack}>
+                  <RNView style={styles.membershipDetailRow}>
+                    <Text style={styles.membershipDetailLabel}>Started</Text>
+                    <Text style={styles.membershipDetailValue}>{membershipStartedLabel}</Text>
+                  </RNView>
+                  <RNView style={styles.membershipDetailRow}>
+                    <Text style={styles.membershipDetailLabel}>Source</Text>
+                    <Text style={styles.membershipDetailValue}>{membershipSourceLabel}</Text>
+                  </RNView>
+                  <RNView style={styles.membershipDetailRow}>
+                    <Text style={styles.membershipDetailLabel}>Active until</Text>
+                    <Text style={styles.membershipDetailValue}>{membershipExpiryLabel || 'No expiration recorded'}</Text>
+                  </RNView>
+                  <Text style={styles.webMembershipNote}>{membershipSourceDetail}</Text>
+                </RNView>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={[styles.webPrimaryButton, purchasePending && styles.buttonDisabled]}
+                    onPress={() => void handlePurchase()}
+                    disabled={purchasePending}
+                  >
+                    {purchasePending ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.webPrimaryButtonText}>Buy Premium</Text>}
+                  </TouchableOpacity>
+                  <Text style={styles.webMembershipNote}>
+                    {unavailableReason || 'Premium checkout is available on this device.'}
+                  </Text>
+                </>
+              )}
             </Card>
 
           <Card style={styles.webPanel}>
@@ -528,6 +582,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     color: '#64748B',
+  },
+  membershipDetailStack: {
+    gap: 12,
+    backgroundColor: 'transparent',
+  },
+  membershipDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: 'transparent',
+  },
+  membershipDetailLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  membershipDetailValue: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'right',
   },
   webBenefitRow: {
     flexDirection: 'row',

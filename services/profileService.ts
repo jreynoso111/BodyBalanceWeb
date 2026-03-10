@@ -9,6 +9,10 @@ const isMissingDefaultLanguageColumn = (message?: string) =>
   String(message || '').toLowerCase().includes('default_language');
 const isMissingFriendCodeColumn = (message?: string) =>
   String(message || '').toLowerCase().includes('friend_code');
+const isMissingPremiumMetadataColumn = (message?: string) => {
+  const normalized = String(message || '').toLowerCase();
+  return normalized.includes('last_premium_granted_at') || normalized.includes('last_premium_granted_source');
+};
 
 const normalizeRole = (role?: string | null) => {
   const normalized = String(role || '').toLowerCase().trim();
@@ -33,6 +37,13 @@ export type UserProfile = {
   friendCode: string;
   friendCodeStatus: 'ready' | 'missing';
   planTier: PlanTier;
+  premiumReferralExpiresAt: string | null;
+};
+
+export type MembershipDetails = {
+  planTier: PlanTier;
+  grantedAt: string | null;
+  grantedSource: 'referral' | 'purchase' | 'admin' | null;
   premiumReferralExpiresAt: string | null;
 };
 
@@ -164,6 +175,41 @@ export async function fetchMyProfile(user: User): Promise<UserProfile> {
     friendCode: resolvedFriendCode,
     friendCodeStatus: resolvedFriendCode ? 'ready' : 'missing',
     planTier: normalizePlanTier((data as any)?.plan_tier, (data as any)?.premium_referral_expires_at),
+    premiumReferralExpiresAt: (data as any)?.premium_referral_expires_at || null,
+  };
+}
+
+export async function fetchMyMembershipDetails(userId: string): Promise<MembershipDetails> {
+  let { data, error } = await supabase
+    .from('profiles')
+    .select('plan_tier, premium_referral_expires_at, last_premium_granted_at, last_premium_granted_source')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error && isMissingPremiumMetadataColumn(error.message)) {
+    const fallback = await supabase
+      .from('profiles')
+      .select('plan_tier, premium_referral_expires_at')
+      .eq('id', userId)
+      .maybeSingle();
+    data = fallback.data as any;
+    error = fallback.error as any;
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const rawSource = String((data as any)?.last_premium_granted_source || '').trim().toLowerCase();
+  const grantedSource =
+    rawSource === 'referral' || rawSource === 'purchase' || rawSource === 'admin'
+      ? rawSource
+      : null;
+
+  return {
+    planTier: normalizePlanTier((data as any)?.plan_tier, (data as any)?.premium_referral_expires_at),
+    grantedAt: (data as any)?.last_premium_granted_at || null,
+    grantedSource,
     premiumReferralExpiresAt: (data as any)?.premium_referral_expires_at || null,
   };
 }
