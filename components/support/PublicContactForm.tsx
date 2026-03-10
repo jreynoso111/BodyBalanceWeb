@@ -9,6 +9,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type FormState = {
   name: string;
   email: string;
+  confirmEmail: string;
   subject: string;
   message: string;
   website: string;
@@ -17,6 +18,7 @@ type FormState = {
 const INITIAL_FORM: FormState = {
   name: '',
   email: '',
+  confirmEmail: '',
   subject: '',
   message: '',
   website: '',
@@ -35,19 +37,25 @@ export function PublicContactForm() {
   const submit = async () => {
     const name = form.name.trim();
     const email = form.email.trim().toLowerCase();
+    const confirmEmail = form.confirmEmail.trim().toLowerCase();
     const subject = form.subject.trim();
     const message = form.message.trim();
 
     setError('');
     setSuccess('');
 
-    if (!name || !email || !message) {
-      setError('Name, email, and message are required.');
+    if (!name || !email || !confirmEmail || !message) {
+      setError('Name, email, email confirmation, and message are required.');
       return;
     }
 
     if (!EMAIL_PATTERN.test(email)) {
       setError('Enter a valid email address.');
+      return;
+    }
+
+    if (email !== confirmEmail) {
+      setError('Email addresses do not match.');
       return;
     }
 
@@ -103,6 +111,16 @@ export function PublicContactForm() {
           style={[styles.input, styles.halfInput]}
         />
       </View>
+
+      <TextInput
+        value={form.confirmEmail}
+        onChangeText={(value) => updateField('confirmEmail', value)}
+        placeholder="Confirm your email"
+        placeholderTextColor="#94A3B8"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        style={styles.input}
+      />
 
       <TextInput
         value={form.subject}

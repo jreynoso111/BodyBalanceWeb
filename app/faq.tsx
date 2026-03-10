@@ -71,7 +71,6 @@ export default function FAQScreen() {
   if (Platform.OS === 'web') {
     return (
       <PublicSiteLayout
-        eyebrow="Support / FAQ"
         title="FAQ is the fast-answer branch of the Buddy Balance support section."
         description="These answers reflect the current product behavior around records, contacts, notifications, shared history, Premium, and account support."
         actions={[

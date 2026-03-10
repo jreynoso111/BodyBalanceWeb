@@ -43,7 +43,7 @@ export default function ForgotPasswordScreen() {
 
             showMessage(
                 'Email sent',
-                'Check your inbox and open the link to reset your password.',
+                'Check your inbox and open the link to reset your password. If you do not see it, review your spam or junk folder too.',
                 'success'
             );
         } finally {

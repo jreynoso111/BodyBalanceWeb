@@ -1,8 +1,9 @@
 import React from 'react';
-import { ScrollView, StyleSheet } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Stack, useLocalSearchParams, type Href } from 'expo-router';
 
 import { Card, Screen, Text } from '@/components/Themed';
+import { PublicSiteLayout } from '@/components/website/PublicSiteLayout';
 
 type HelpSection = {
   title: string;
@@ -59,6 +60,27 @@ export default function HelpDetailScreen() {
   const { slug } = useLocalSearchParams<{ slug?: string }>();
   const section = (slug && HELP_SECTIONS[slug]) || FALLBACK_SECTION;
 
+  if (Platform.OS === 'web') {
+    return (
+      <PublicSiteLayout
+        title={section.title}
+        description={section.intro}
+        actions={[
+          { href: '/help-support', label: 'Back to Support' },
+          { href: '/faq' as Href, label: 'Open FAQ', variant: 'secondary' },
+        ]}
+      >
+        <View style={styles.webBodyCard}>
+          {section.bullets.map((bullet) => (
+            <Text key={bullet} style={styles.webBullet}>
+              {`\u2022 ${bullet}`}
+            </Text>
+          ))}
+        </View>
+      </PublicSiteLayout>
+    );
+  }
+
   return (
     <Screen style={styles.container}>
       <Stack.Screen options={{ title: section.title }} />
@@ -110,10 +132,23 @@ const styles = StyleSheet.create({
   bodyCard: {
     padding: 18,
   },
+  webBodyCard: {
+    padding: 24,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.16)',
+  },
   bullet: {
     fontSize: 14,
     lineHeight: 22,
     color: '#334155',
     marginBottom: 12,
+  },
+  webBullet: {
+    fontSize: 15,
+    lineHeight: 25,
+    color: '#334155',
+    marginBottom: 14,
   },
 });

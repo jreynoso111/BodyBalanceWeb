@@ -268,7 +268,7 @@ export default function AdminUsersList() {
                 redirectTo: Linking.createURL('/reset-password'),
             });
 
-            Alert.alert('Reset email sent', `A password reset email was sent to ${user.email}.`);
+            Alert.alert('Reset email sent', `A password reset email was sent to ${user.email}. If it does not appear in the inbox, check the spam or junk folder.`);
         } catch (err: any) {
             Alert.alert('Action failed', err.message || 'The reset email could not be sent.');
         } finally {

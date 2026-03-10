@@ -11,6 +11,35 @@ const SUPPORT_FROM_NAME = Deno.env.get('SUPPORT_FROM_NAME') || 'Buddy Balance';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
+async function domainAcceptsEmail(domain: string) {
+  const dnsHeaders = {
+    Accept: 'application/dns-json',
+  };
+
+  const queryRecords = async (type: 'MX' | 'A' | 'AAAA') => {
+    const response = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=${type}`, {
+      headers: dnsHeaders,
+    });
+
+    if (!response.ok) {
+      throw new Error(`DNS lookup failed for ${type}.`);
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    return Array.isArray(payload?.Answer) && payload.Answer.length > 0;
+  };
+
+  if (await queryRecords('MX').catch(() => false)) {
+    return true;
+  }
+
+  if (await queryRecords('A').catch(() => false)) {
+    return true;
+  }
+
+  return await queryRecords('AAAA').catch(() => false);
+}
+
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -64,6 +93,11 @@ Deno.serve(async (req) => {
 
     if (!EMAIL_PATTERN.test(email)) {
       return json({ error: 'Invalid email address.' }, 400);
+    }
+
+    const emailDomain = email.split('@')[1] || '';
+    if (!emailDomain || !(await domainAcceptsEmail(emailDomain))) {
+      return json({ error: 'Use a real email address with a valid mail domain.' }, 400);
     }
 
     if (name.length > 120 || subject.length > 160 || message.length > 4000) {

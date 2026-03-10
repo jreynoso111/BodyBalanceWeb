@@ -68,7 +68,6 @@ export default function TermsOfServiceScreen() {
   if (Platform.OS === 'web') {
     return (
       <PublicSiteLayout
-        eyebrow="Support / Terms"
         title="Terms is the rules-and-limits branch of the Buddy Balance support section."
         description="Buddy Balance is a shared tracking tool. It helps people record loans, payments, returns, and related activity, but it does not replace the real-world responsibility between the people involved."
         actions={[

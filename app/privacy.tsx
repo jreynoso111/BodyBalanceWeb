@@ -58,7 +58,6 @@ export default function PrivacyPolicyScreen() {
   if (Platform.OS === 'web') {
     return (
       <PublicSiteLayout
-        eyebrow="Support / Privacy"
         title="Privacy is the policy branch of the Buddy Balance support section."
         description="Buddy Balance is built around shared activity between connected people, so this policy explains both the personal data you provide and the event history that can become visible to other participants."
         actions={[

@@ -27,7 +27,6 @@ export default function ContactScreen() {
   if (Platform.OS === 'web') {
     return (
       <PublicSiteLayout
-        eyebrow="Support / Contact"
         title="Contact is the lane for real account help, not generic marketing copy."
         description="Use this page when you need to know where a request belongs. Buddy Balance keeps product questions, account issues, and policy pages separated so support stays clean and auditable."
         actions={[

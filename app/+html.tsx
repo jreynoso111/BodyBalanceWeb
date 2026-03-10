@@ -11,16 +11,16 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        <title>Body Balance | Shared Balance Tracking</title>
+        <title>Body Balance | Shared Records With Friends</title>
         <meta name="theme-color" content="#6366F1" />
         <meta
           name="description"
-          content="Body Balance helps friends, families, and trusted contacts track shared balances, payments, and lending history with clarity."
+          content="Body Balance helps friends, families, and trusted contacts keep shared records, reminders, and activity history organized in one place."
         />
         <meta property="og:title" content="Body Balance" />
         <meta
           property="og:description"
-          content="Shared balance tracking for friends, families, and trusted contacts."
+          content="Shared records and reminders for friends, families, and trusted contacts."
         />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="Body Balance" />

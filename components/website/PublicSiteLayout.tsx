@@ -26,6 +26,7 @@ type PublicSiteLayoutProps = {
   description: string;
   actions?: PublicAction[];
   heroVisual?: React.ReactNode;
+  hideHero?: boolean;
   children: React.ReactNode;
 };
 
@@ -58,6 +59,7 @@ export function PublicSiteLayout({
   description,
   actions,
   heroVisual,
+  hideHero = false,
   children,
 }: PublicSiteLayoutProps) {
   const { width } = useWindowDimensions();
@@ -73,8 +75,9 @@ export function PublicSiteLayout({
   return (
     <ScrollView
       style={styles.page}
-      contentContainerStyle={[styles.content, { paddingHorizontal: contentPadding, paddingVertical: mobile ? 16 : 22 }]}
+      contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      stickyHeaderIndices={[1]}
     >
       <View style={styles.backgroundLayer}>
         <LinearGradient colors={['#EEF2FF', '#F7F1FF', '#FFF5E9']} style={styles.gradientWash} />
@@ -83,134 +86,157 @@ export function PublicSiteLayout({
         <View style={[styles.orb, styles.orbBottom]} />
       </View>
 
-      <View style={styles.shell}>
-        <LinearGradient
-          colors={['rgba(255,255,255,0.88)', 'rgba(255,255,255,0.62)']}
-          style={[styles.headerChrome, mobile && styles.headerChromeMobile]}
-        >
-          <Link href="/" asChild>
-            <Pressable style={styles.brandLink}>
-              <View style={styles.brandWrap}>
-                <BrandLogo size={mobile ? 'sm' : 'md'} showWordmark={false} />
-                <View style={styles.brandMeta}>
-                  <Text style={[styles.brandTitle, mobile && styles.brandTitleMobile]}>Buddy Balance</Text>
-                  {!tablet ? (
-                    <Text style={styles.brandSubcopy}>Shared tracking for people who actually know each other.</Text>
-                  ) : null}
+      <View
+        style={[
+          styles.headerStickyWrap,
+          {
+            paddingTop: mobile ? 16 : 22,
+            paddingHorizontal: contentPadding,
+          },
+        ]}
+      >
+        <View style={styles.shell}>
+          <LinearGradient
+            colors={['#FFFFFF', '#F8FAFF']}
+            style={[styles.headerChrome, mobile && styles.headerChromeMobile]}
+          >
+            <Link href="/" asChild>
+              <Pressable style={styles.brandLink}>
+                <View style={styles.brandWrap}>
+                  <BrandLogo size={mobile ? 'sm' : 'md'} showWordmark={false} />
+                  <View style={styles.brandMeta}>
+                    <Text style={[styles.brandTitle, mobile && styles.brandTitleMobile]}>Buddy Balance</Text>
+                    {!tablet ? (
+                      <Text style={styles.brandSubcopy}>Shared tracking for people who actually know each other.</Text>
+                    ) : null}
+                  </View>
                 </View>
-              </View>
-            </Pressable>
-          </Link>
-
-          <View style={[styles.nav, compact && styles.navCompact, mobile && styles.navMobile]}>
-            {NAV_ITEMS.map((item) => {
-              const active = isActivePath(pathname, item.matches);
-              return (
-                <Link key={item.label} href={item.href} asChild>
-                  <Pressable
-                    style={StyleSheet.flatten([
-                      styles.navLink,
-                      mobile && styles.navLinkMobile,
-                      active ? styles.navLinkActive : null,
-                    ])}
-                  >
-                    <Text style={[styles.navLabel, mobile && styles.navLabelMobile, active ? styles.navLabelActive : null]}>
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                </Link>
-              );
-            })}
-            <Link href={user ? '/settings' : '/(auth)/login'} asChild>
-              <Pressable
-                style={StyleSheet.flatten([
-                  styles.accountLink,
-                  user && styles.accountLinkActive,
-                ])}
-              >
-                <Text style={[styles.accountLabel, user && styles.accountLabelActive]}>
-                  {user ? 'Account' : 'Sign in'}
-                </Text>
               </Pressable>
             </Link>
-          </View>
-        </LinearGradient>
 
-        <View style={[styles.heroShell, compact && styles.heroShellCompact]}>
-          <LinearGradient
-            colors={['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.68)']}
-            style={[styles.heroPanel, compact && styles.heroPanelCompact]}
-          >
-            <View style={styles.heroPanelHeader}>
-              <Text style={styles.heroDot}>REC</Text>
-              <View style={styles.heroSignalRow}>
-                {SIGNALS.map((signal) => (
-                  <View key={signal} style={styles.signalChip}>
-                    <Text style={styles.signalLabel}>{signal}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-            <Text
-              style={[
-                styles.title,
-                compact && styles.titleCompact,
-                { fontSize: heroTitleSize, lineHeight: heroTitleLineHeight },
-              ]}
-            >
-              {title}
-            </Text>
-            <Text style={[styles.description, mobile && styles.descriptionMobile]}>{description}</Text>
-
-            {actions?.length ? (
-              <View style={[styles.actions, mobile && styles.actionsMobile]}>
-                {actions.map((action) => (
-                  <Link key={`${action.href}:${action.label}`} href={action.href} asChild>
+            <View style={[styles.nav, compact && styles.navCompact, mobile && styles.navMobile]}>
+              {NAV_ITEMS.map((item) => {
+                const active = isActivePath(pathname, item.matches);
+                return (
+                  <Link key={item.label} href={item.href} asChild>
                     <Pressable
                       style={StyleSheet.flatten([
-                        styles.actionButton,
-                        mobile && styles.actionButtonMobile,
-                        action.variant === 'secondary' ? styles.actionSecondary : styles.actionPrimary,
+                        styles.navLink,
+                        mobile && styles.navLinkMobile,
+                        active ? styles.navLinkActive : null,
                       ])}
                     >
-                      <Text
-                        style={[
-                          styles.actionLabel,
-                          action.variant === 'secondary' ? styles.actionSecondaryLabel : styles.actionPrimaryLabel,
-                        ]}
-                      >
-                        {action.label}
+                      <Text style={[styles.navLabel, mobile && styles.navLabelMobile, active ? styles.navLabelActive : null]}>
+                        {item.label}
                       </Text>
                     </Pressable>
                   </Link>
-                ))}
-              </View>
-            ) : null}
+                );
+              })}
+              <Link href={user ? '/settings' : '/(auth)/login'} asChild>
+                <Pressable
+                  style={StyleSheet.flatten([
+                    styles.accountLink,
+                    user && styles.accountLinkActive,
+                  ])}
+                >
+                  <Text style={[styles.accountLabel, user && styles.accountLabelActive]}>
+                    {user ? 'Account' : 'Sign in'}
+                  </Text>
+                </Pressable>
+              </Link>
+            </View>
           </LinearGradient>
+        </View>
+      </View>
 
-          {heroVisual ? (
-            <View style={[styles.heroVisual, compact && styles.heroVisualCompact, mobile && styles.heroVisualMobile]}>
-              {heroVisual}
+      <View
+        style={[
+          styles.mainContent,
+          {
+            paddingBottom: mobile ? 16 : 22,
+            paddingHorizontal: contentPadding,
+          },
+        ]}
+      >
+        <View style={styles.shell}>
+          {!hideHero ? (
+            <View style={[styles.heroShell, compact && styles.heroShellCompact]}>
+              <LinearGradient
+                colors={['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.68)']}
+                style={[styles.heroPanel, compact && styles.heroPanelCompact]}
+              >
+                <View style={styles.heroPanelHeader}>
+                  <View style={styles.heroSignalRow}>
+                    {SIGNALS.map((signal) => (
+                      <View key={signal} style={styles.signalChip}>
+                        <Text style={styles.signalLabel}>{signal}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+                <Text
+                  style={[
+                    styles.title,
+                    compact && styles.titleCompact,
+                    { fontSize: heroTitleSize, lineHeight: heroTitleLineHeight },
+                  ]}
+                >
+                  {title}
+                </Text>
+                <Text style={[styles.description, mobile && styles.descriptionMobile]}>{description}</Text>
+
+                {actions?.length ? (
+                  <View style={[styles.actions, mobile && styles.actionsMobile]}>
+                    {actions.map((action) => (
+                      <Link key={`${action.href}:${action.label}`} href={action.href} asChild>
+                        <Pressable
+                          style={StyleSheet.flatten([
+                            styles.actionButton,
+                            mobile && styles.actionButtonMobile,
+                            action.variant === 'secondary' ? styles.actionSecondary : styles.actionPrimary,
+                          ])}
+                        >
+                          <Text
+                            style={[
+                              styles.actionLabel,
+                              action.variant === 'secondary' ? styles.actionSecondaryLabel : styles.actionPrimaryLabel,
+                            ]}
+                          >
+                            {action.label}
+                          </Text>
+                        </Pressable>
+                      </Link>
+                    ))}
+                  </View>
+                ) : null}
+              </LinearGradient>
+
+              {heroVisual ? (
+                <View style={[styles.heroVisual, compact && styles.heroVisualCompact, mobile && styles.heroVisualMobile]}>
+                  {heroVisual}
+                </View>
+              ) : null}
             </View>
           ) : null}
-        </View>
 
-        <View style={styles.body}>{children}</View>
+          <View style={[styles.body, hideHero && styles.bodyWithoutHero]}>{children}</View>
 
-        <LinearGradient colors={['rgba(15,23,42,0.96)', 'rgba(30,41,59,0.92)']} style={[styles.footerShell, mobile && styles.footerShellMobile]}>
-          <View style={[styles.footerRow, mobile && styles.footerRowMobile]}>
-            <View style={styles.footerStamp}>
-              <Text style={styles.footerStampText}>MOBILE FIRST</Text>
+          <LinearGradient colors={['rgba(15,23,42,0.96)', 'rgba(30,41,59,0.92)']} style={[styles.footerShell, mobile && styles.footerShellMobile]}>
+            <View style={[styles.footerRow, mobile && styles.footerRowMobile]}>
+              <View style={styles.footerStamp}>
+                <Text style={styles.footerStampText}>MOBILE FIRST</Text>
+              </View>
+              <Text style={styles.footerNote}>
+                Buddy Balance is rolling toward public release. This site hosts support, policies, and product context
+                while the mobile app gets finalized.
+              </Text>
             </View>
-            <Text style={styles.footerNote}>
-              Buddy Balance is rolling toward public release. This site hosts support, policies, and product context
-              while the mobile app gets finalized.
-            </Text>
-          </View>
-          <AppLegalFooter style={styles.footerText} />
-        </LinearGradient>
+            <AppLegalFooter style={styles.footerText} />
+          </LinearGradient>
+        </View>
       </View>
     </ScrollView>
   );
@@ -240,8 +266,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F5FF',
   },
   content: {
-    paddingHorizontal: 18,
-    paddingVertical: 22,
+    paddingBottom: 0,
+  },
+  headerStickyWrap: {
+    zIndex: 30,
+    backgroundColor: 'transparent',
+    paddingBottom: 10,
+  },
+  mainContent: {
+    paddingTop: 0,
   },
   backgroundLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -437,12 +470,6 @@ const styles = StyleSheet.create({
     gap: 14,
     marginBottom: 16,
   },
-  heroDot: {
-    color: '#EF4444',
-    fontFamily: 'SpaceMono',
-    fontSize: 12,
-    letterSpacing: 1.6,
-  },
   heroSignalRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -548,6 +575,9 @@ const styles = StyleSheet.create({
   },
   body: {
     gap: 18,
+  },
+  bodyWithoutHero: {
+    marginTop: 8,
   },
   card: {
     padding: 22,

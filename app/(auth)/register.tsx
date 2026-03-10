@@ -135,7 +135,7 @@ export default function RegisterScreen() {
             setStep('verify');
             showMessage(
                 'Verification code sent',
-                'Enter the 6-digit code sent to your email to finish creating your account.',
+                'Enter the 6-digit code sent to your email to finish creating your account. If it does not appear in the inbox, check your spam or junk folder.',
                 'info'
             );
         } catch (error: any) {

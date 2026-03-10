@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, usePathname, useRouter, type Href } from 'expo-router';
-import { Pressable, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { Text } from '@/components/Themed';
@@ -62,25 +62,34 @@ export function WebAccountLayout({
   };
 
   return (
-    <View style={styles.page}>
-      <View style={styles.shell}>
-        <View style={styles.topbar}>
-          <View>
-            <Text style={styles.productLabel}>Buddy Balance account</Text>
-            <Text style={styles.productSubcopy}>Signed in with the same Supabase account used in the app.</Text>
-          </View>
-          <View style={styles.topbarActions}>
-            <Link href="/" asChild>
-              <Pressable style={styles.siteButton}>
-                <Text style={styles.siteButtonText}>Public site</Text>
-              </Pressable>
-            </Link>
-            <TouchableOpacity style={styles.signOutButton} onPress={() => void signOut()}>
-              <Text style={styles.signOutButtonText}>Sign out</Text>
-            </TouchableOpacity>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      stickyHeaderIndices={[0]}
+    >
+      <View style={styles.topbarSticky}>
+        <View style={styles.shellFrame}>
+          <View style={styles.topbar}>
+            <View>
+              <Text style={styles.productLabel}>Buddy Balance account</Text>
+              <Text style={styles.productSubcopy}>Signed in with the same Supabase account used in the app.</Text>
+            </View>
+            <View style={styles.topbarActions}>
+              <Link href="/" asChild>
+                <Pressable style={styles.siteButton}>
+                  <Text style={styles.siteButtonText}>Public site</Text>
+                </Pressable>
+              </Link>
+              <TouchableOpacity style={styles.signOutButton} onPress={() => void signOut()}>
+                <Text style={styles.signOutButtonText}>Sign out</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
+      </View>
 
+      <View style={styles.shellFrame}>
         <View style={styles.main}>
           <View style={styles.sidebar}>
             <View style={styles.profileCard}>
@@ -121,7 +130,7 @@ export function WebAccountLayout({
 
         <AppLegalFooter style={styles.footer} />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -130,13 +139,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F6F8FF',
   },
-  shell: {
-    width: '100%',
-    maxWidth: 1280,
-    alignSelf: 'center',
+  scrollContent: {
     paddingHorizontal: 20,
     paddingVertical: 24,
     gap: 18,
+  },
+  shellFrame: {
+    width: '100%',
+    maxWidth: 1280,
+    alignSelf: 'center',
+  },
+  topbarSticky: {
+    zIndex: 20,
+    backgroundColor: 'rgba(246,248,255,0.94)',
+    paddingBottom: 10,
   },
   topbar: {
     borderRadius: 24,

@@ -59,7 +59,7 @@ export default function LoginScreen() {
             return 'Invalid email or password.';
         }
         if (normalized.includes('email not confirmed')) {
-            return 'Your email is not confirmed yet. Check your inbox and confirm your account first.';
+            return 'Your email is not confirmed yet. Check your inbox and confirm your account first. If you do not see the message, review your spam or junk folder.';
         }
 
         return message;
