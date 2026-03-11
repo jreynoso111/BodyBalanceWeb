@@ -6,6 +6,7 @@ import { useLocalSearchParams, useNavigation, useRouter, Stack, useFocusEffect }
 import { CommonActions } from '@react-navigation/native';
 import { supabase } from '@/services/supabase';
 import { ArrowLeft, Wallet, Calendar, Plus, Clock, FileText, Trash2, Edit, Box, ChevronRight, TrendingUp, TrendingDown, Zap, Activity, ShieldCheck, ShieldAlert, Shield, Bell, History, MoreHorizontal, Info, Share2, X } from 'lucide-react-native';
+import { PREMIUM_BENEFITS_SENTENCE } from '@/constants/Premium';
 import { useAuthStore } from '@/store/authStore';
 import { CURRENCIES, getCurrencySymbol } from '@/constants/Currencies';
 import { getOrCreateUserPreferences, sanitizePreferredCurrencies, updateUserPreferences } from '@/services/userPreferences';
@@ -592,7 +593,7 @@ export default function LoanDetailScreen() {
 
     const handleSharePdf = async () => {
         if (planTier !== 'premium') {
-            Alert.alert('Premium feature', 'PDF sharing is available only for Premium accounts.');
+            Alert.alert('Premium feature', `PDF sharing is available only for Premium accounts. ${PREMIUM_BENEFITS_SENTENCE}`);
             return;
         }
 

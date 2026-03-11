@@ -25,6 +25,9 @@ type PublicSiteLayoutProps = {
   title: string;
   description: string;
   actions?: PublicAction[];
+  primaryAction?: PublicAction;
+  secondaryActions?: PublicAction[];
+  ctaSupportText?: string;
   heroVisual?: React.ReactNode;
   hideHero?: boolean;
   children: React.ReactNode;
@@ -43,7 +46,7 @@ const SIGNALS = [
   'Shared records',
   'Notification events',
   'Friend-linked accounts',
-  'Premium exports',
+  'Shared history insights',
 ];
 
 function isActivePath(currentPath: string, matches: string[]) {
@@ -58,6 +61,9 @@ export function PublicSiteLayout({
   title,
   description,
   actions,
+  primaryAction,
+  secondaryActions,
+  ctaSupportText,
   heroVisual,
   hideHero = false,
   children,
@@ -191,7 +197,45 @@ export function PublicSiteLayout({
                 </Text>
                 <Text style={[styles.description, mobile && styles.descriptionMobile]}>{description}</Text>
 
-                {actions?.length ? (
+                {primaryAction ? (
+                  <View style={styles.heroCtaBlock}>
+                    <Link href={primaryAction.href} asChild>
+                      <Pressable
+                        style={StyleSheet.flatten([
+                          styles.actionButton,
+                          styles.primaryHeroActionButton,
+                          mobile && styles.actionButtonMobile,
+                          mobile && styles.primaryHeroActionButtonMobile,
+                          styles.actionPrimary,
+                        ])}
+                      >
+                        <Text style={[styles.actionLabel, styles.primaryHeroActionLabel, styles.actionPrimaryLabel]}>
+                          {primaryAction.label}
+                        </Text>
+                      </Pressable>
+                    </Link>
+
+                    {ctaSupportText ? <Text style={styles.ctaSupportText}>{ctaSupportText}</Text> : null}
+
+                    {secondaryActions?.length ? (
+                      <View style={[styles.actions, styles.secondaryActions, mobile && styles.actionsMobile]}>
+                        {secondaryActions.map((action) => (
+                          <Link key={`${action.href}:${action.label}`} href={action.href} asChild>
+                            <Pressable
+                              style={StyleSheet.flatten([
+                                styles.actionButton,
+                                mobile && styles.actionButtonMobile,
+                                styles.actionSecondary,
+                              ])}
+                            >
+                              <Text style={[styles.actionLabel, styles.actionSecondaryLabel]}>{action.label}</Text>
+                            </Pressable>
+                          </Link>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : actions?.length ? (
                   <View style={[styles.actions, mobile && styles.actionsMobile]}>
                     {actions.map((action) => (
                       <Link key={`${action.href}:${action.label}`} href={action.href} asChild>
@@ -533,14 +577,20 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     marginTop: 14,
   },
-  actions: {
+  heroCtaBlock: {
     marginTop: 28,
+    alignItems: 'flex-start',
+  },
+  actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
   },
   actionsMobile: {
     gap: 10,
+  },
+  secondaryActions: {
+    marginTop: 14,
   },
   actionButton: {
     minHeight: 52,
@@ -554,6 +604,14 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingHorizontal: 14,
     flexGrow: 1,
+  },
+  primaryHeroActionButton: {
+    minHeight: 60,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  primaryHeroActionButtonMobile: {
+    width: '100%',
   },
   actionPrimary: {
     backgroundColor: '#5B63FF',
@@ -573,11 +631,21 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.2,
   },
+  primaryHeroActionLabel: {
+    fontSize: 16,
+  },
   actionPrimaryLabel: {
     color: '#FFFFFF',
   },
   actionSecondaryLabel: {
     color: '#101A3A',
+  },
+  ctaSupportText: {
+    marginTop: 12,
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#475569',
+    maxWidth: 440,
   },
   heroVisual: {
     width: 420,

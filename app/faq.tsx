@@ -2,6 +2,7 @@ import React from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Stack, type Href } from 'expo-router';
 import { Screen, Card, Text } from '@/components/Themed';
+import { PREMIUM_BENEFITS_SENTENCE } from '@/constants/Premium';
 import { PublicSiteLayout } from '@/components/website/PublicSiteLayout';
 
 const FAQ_ITEMS = [
@@ -53,12 +54,12 @@ const FAQ_ITEMS = [
   {
     question: 'What does Premium change?',
     answer:
-      'Premium unlocks premium-only capabilities such as export and broader record management benefits. When the active account is Premium, the app can show that plan status in the header and in Settings.',
+      `${PREMIUM_BENEFITS_SENTENCE} It also removes the free-plan caps on linked friends and active records.`,
   },
   {
     question: 'Can I export my records?',
     answer:
-      'Yes. Premium users can go to Settings and use "Export Data (CSV)" to download records, payments, and related contact data.',
+      'Yes. Unlimited CSV exports are part of Premium, so Premium users can go to Settings and export records, payments, and related contact data.',
   },
   {
     question: 'Does Buddy Balance move real money?',

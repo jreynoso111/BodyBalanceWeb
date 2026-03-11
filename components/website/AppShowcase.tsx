@@ -476,7 +476,7 @@ function PremiumScreen() {
       <SettingsRow
         icon={<Crown size={16} color="#F59E0B" />}
         title="Export Data (CSV)"
-        subline="Premium feature"
+        subline="Unlimited CSV exports"
       />
     </View>
   );

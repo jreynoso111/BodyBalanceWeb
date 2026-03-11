@@ -3,9 +3,12 @@ import { ActivityIndicator, Alert, Linking, Platform, ScrollView, StyleSheet, Te
 import { Redirect } from 'expo-router';
 import { Check, Shield, Smartphone } from 'lucide-react-native';
 
+import {
+  PREMIUM_BENEFITS,
+  PREMIUM_BENEFITS_SENTENCE,
+} from '@/constants/Premium';
 import { Card, Screen, Text } from '@/components/Themed';
 import {
-  getBillingEntitlementId,
   getBillingUnavailableReason,
   isBillingAvailable,
   purchasePremiumPackage,
@@ -163,8 +166,8 @@ export default function SubscriptionScreen() {
               <Text style={[styles.webPlanValue, compactWeb && styles.webPlanValueCompact]}>{planTitle}</Text>
               <Text style={styles.webBody}>
                 {planTier === 'premium'
-                  ? 'Premium is already active on this account. This section now shows how the membership was granted and whether it has an expiration date.'
-                  : 'Use this Membership section to move the account from Free to Premium. Checkout still depends on the billing flow available for the device.'}
+                  ? `Premium is already active on this account. ${PREMIUM_BENEFITS_SENTENCE} This section now shows how the membership was granted and whether it has an expiration date.`
+                  : `Upgrade from Free to Premium. ${PREMIUM_BENEFITS_SENTENCE} Checkout still depends on the billing flow available for the device.`}
               </Text>
               {planTier === 'premium' ? (
                 <RNView style={styles.membershipDetailStack}>
@@ -202,18 +205,19 @@ export default function SubscriptionScreen() {
             </Card>
 
           <Card style={[styles.webPanel, compactWeb && styles.webPanelCompact]}>
-            <Text style={styles.webPanelTitle}>What Premium unlocks</Text>
-            {[
-              `Unlimited linked friends instead of ${PLAN_LIMITS.free.linkedFriends}`,
-              `Unlimited active records instead of ${PLAN_LIMITS.free.activeRecords}`,
-              'Priority support for account issues',
-              ...(planTier === 'premium' ? [] : ['1 free month of Premium every 3 successful invite code uses']),
-            ].map((benefit) => (
+            <Text style={styles.webPanelTitle}>What Premium includes</Text>
+            {PREMIUM_BENEFITS.map((benefit) => (
               <RNView key={benefit} style={styles.webBenefitRow}>
                 <Check size={15} color="#10B981" />
                 <Text style={styles.webBenefitText}>{benefit}</Text>
               </RNView>
             ))}
+            <Text style={styles.webMembershipNote}>
+              Premium also removes the free-plan caps: {PLAN_LIMITS.free.linkedFriends} linked friends and {PLAN_LIMITS.free.activeRecords} active records on Free.
+            </Text>
+            {planTier !== 'premium' ? (
+              <Text style={styles.webMembershipNote}>Referral reward: 1 free month of Premium every 3 successful invite code uses.</Text>
+            ) : null}
           </Card>
         </RNView>
 
@@ -268,8 +272,7 @@ export default function SubscriptionScreen() {
           <Text style={styles.heroEyebrow}>Plan</Text>
           <Text style={styles.heroTitle}>{planTitle}</Text>
           <Text style={styles.heroText}>
-            Buddy Balance Pro removes the friend and active record limits. Android checkout will be handled directly by Google
-            Play.
+            {PREMIUM_BENEFITS_SENTENCE} Premium also removes the free-plan caps on linked friends and active records.
           </Text>
           {planTier !== 'premium' ? (
             <RNView style={styles.ctaGroup}>
@@ -292,14 +295,8 @@ export default function SubscriptionScreen() {
         </Card>
 
         <Card style={styles.compareCard}>
-          <Text style={styles.sectionTitle}>What Buddy Balance Pro unlocks</Text>
-          {[
-            `Unlimited linked friends instead of ${PLAN_LIMITS.free.linkedFriends}`,
-            `Unlimited active records instead of ${PLAN_LIMITS.free.activeRecords}`,
-            'Priority support for account issues',
-            ...(planTier === 'premium' ? [] : ['1 free month of Premium every 3 successful invite code uses']),
-            `Premium plan tier: "${getBillingEntitlementId()}"`,
-          ].map((benefit) => (
+          <Text style={styles.sectionTitle}>What Premium includes</Text>
+          {PREMIUM_BENEFITS.map((benefit) => (
             <RNView key={benefit} style={styles.benefitRow}>
               <RNView style={styles.benefitIcon}>
                 <Check size={14} color="#10B981" />
@@ -307,6 +304,12 @@ export default function SubscriptionScreen() {
               <Text style={styles.benefitText}>{benefit}</Text>
             </RNView>
           ))}
+          <Text style={styles.stateFootnote}>
+            Premium also removes the free-plan caps: {PLAN_LIMITS.free.linkedFriends} linked friends and {PLAN_LIMITS.free.activeRecords} active records on Free.
+          </Text>
+          {planTier !== 'premium' ? (
+            <Text style={styles.androidHint}>Referral reward: 1 free month of Premium every 3 successful invite code uses.</Text>
+          ) : null}
         </Card>
 
         <Card style={styles.stateCard}>

@@ -52,9 +52,11 @@ export default function LandingPage() {
                 eyebrow="Buddy Balance . Mobile Ledger . 2026"
                 title="A simple way to keep shared records and reminders with friends."
                 description="Buddy Balance helps friends keep track of shared activity, returns, reminders, and account history in one place. It does not send money, connect bank accounts, or move funds."
-                actions={[
-                    { href: 'https://apps.apple.com/' as Href, label: 'Download on iOS' },
-                    { href: 'https://play.google.com/store' as Href, label: 'Get it on Google Play', variant: 'secondary' },
+                primaryAction={{ href: 'https://apps.apple.com/' as Href, label: 'Download BuddyBalance' }}
+                ctaSupportText="Track shared balances with friends and family in seconds."
+                secondaryActions={[
+                    { href: 'https://apps.apple.com/' as Href, label: 'App Store', variant: 'secondary' },
+                    { href: 'https://play.google.com/store' as Href, label: 'Google Play', variant: 'secondary' },
                 ]}
                 heroVisual={<AppShowcase />}
             >

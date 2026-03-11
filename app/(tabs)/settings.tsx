@@ -9,6 +9,11 @@ import { exportLoansToCSV } from '@/services/exportService';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { DEFAULT_USER_PREFERENCES, getOrCreateUserPreferences } from '@/services/userPreferences';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+    PREMIUM_BENEFITS_SENTENCE,
+    PREMIUM_BENEFITS_SHORT,
+    PREMIUM_EXPORT_LOCK_MESSAGE,
+} from '@/constants/Premium';
 import { getProfileAvatarPublicUrl, isMissingAvatarUrlColumn } from '@/services/profileAvatar';
 import { getPlanLabel, normalizePlanTier } from '@/services/subscriptionPlan';
 import { getDeviceLanguage, normalizeLanguage, SUPPORTED_LANGUAGES, type AppLanguage } from '@/constants/i18n';
@@ -152,7 +157,7 @@ export default function SettingsScreen() {
 
     const handleExport = async () => {
         if (planTier !== 'premium') {
-            Alert.alert('Premium feature', 'Export Data (CSV) is available only for Premium accounts.');
+            Alert.alert('Premium feature', PREMIUM_EXPORT_LOCK_MESSAGE);
             return;
         }
 
@@ -209,7 +214,7 @@ export default function SettingsScreen() {
         {
             icon: Sparkles,
             label: planTier === 'premium' ? 'Manage Premium' : 'Upgrade to Premium',
-            sub: planTier === 'premium' ? 'Unlimited friends and records' : 'Unlock unlimited friends and records',
+            sub: planTier === 'premium' ? PREMIUM_BENEFITS_SHORT : `Unlock ${PREMIUM_BENEFITS_SHORT.toLowerCase()}`,
             onPress: () => router.push('/subscription' as any),
         },
         { icon: User, label: 'Profile', sub: user?.email, onPress: () => router.push('/profile') },
@@ -221,7 +226,7 @@ export default function SettingsScreen() {
         menuItems.splice(4, 0, {
             icon: FileOutput,
             label: 'Export Data (CSV)',
-            sub: 'Share report',
+            sub: 'Unlimited CSV exports',
             onPress: handleExport,
         });
     }
@@ -290,12 +295,13 @@ export default function SettingsScreen() {
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity style={styles.webPrimaryButton} onPress={() => router.push('/subscription')}>
-                                <Text style={styles.webPrimaryButtonText}>See Premium options</Text>
+                                <Text style={styles.webPrimaryButtonText}>See Premium benefits</Text>
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity style={styles.webSecondaryButton} onPress={handleSignOut} disabled={signingOut}>
                             <Text style={styles.webSecondaryButtonText}>{signingOut ? 'Signing out...' : 'Sign out'}</Text>
                         </TouchableOpacity>
+                        <Text style={styles.webStatusHint}>{PREMIUM_BENEFITS_SENTENCE}</Text>
                     </Card>
                 </View>
 
@@ -710,5 +716,11 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '800',
         color: '#1E293B',
+    },
+    webStatusHint: {
+        marginTop: 12,
+        fontSize: 13,
+        lineHeight: 20,
+        color: '#64748B',
     },
 });
