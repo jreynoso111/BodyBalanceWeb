@@ -2,8 +2,8 @@ import React from 'react';
 import {
   ActivityIndicator,
   Platform,
+  Pressable,
   StyleSheet,
-  TouchableOpacity,
   View as RNView,
   useWindowDimensions,
 } from 'react-native';
@@ -12,6 +12,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Bell,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   Plus,
   Sparkles,
@@ -53,6 +55,8 @@ type DashboardStats = {
   pendingRequests: number;
   dueSoon: number;
 };
+
+type DashboardRecordFilter = 'lent' | 'borrowed' | 'open' | 'active' | 'dueSoon';
 
 const INITIAL_STATS: DashboardStats = {
   openBalance: 0,
@@ -123,9 +127,15 @@ function WorkspaceAction({
   compact?: boolean;
 }) {
   return (
-    <TouchableOpacity
-      style={[styles.actionCard, compact && styles.actionCardCompact, tone === 'primary' ? styles.actionCardPrimary : null]}
-      activeOpacity={0.88}
+    <Pressable
+      style={({ hovered, pressed }) => [
+        styles.actionCard,
+        styles.interactiveSurface,
+        compact && styles.actionCardCompact,
+        tone === 'primary' ? styles.actionCardPrimary : null,
+        hovered && styles.interactiveSurfaceHovered,
+        pressed && styles.interactiveSurfacePressed,
+      ]}
       onPress={onPress}
     >
       <RNView style={[styles.actionIcon, tone === 'primary' ? styles.actionIconPrimary : null]}>{icon}</RNView>
@@ -133,8 +143,17 @@ function WorkspaceAction({
       <Text style={[styles.actionDescription, tone === 'primary' ? styles.actionDescriptionPrimary : null]}>
         {description}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
+}
+
+function getFilterLabel(filter: DashboardRecordFilter | null) {
+  if (filter === 'lent') return 'They owe you';
+  if (filter === 'borrowed') return 'You owe';
+  if (filter === 'open') return 'Open balance';
+  if (filter === 'active') return 'Active records';
+  if (filter === 'dueSoon') return 'Due soon';
+  return 'All open records';
 }
 
 export default function AccountDashboardScreen() {
@@ -142,7 +161,10 @@ export default function AccountDashboardScreen() {
   const router = useRouter();
   const { initialized, user } = useAuthStore();
   const [stats, setStats] = React.useState<DashboardStats>(INITIAL_STATS);
+  const [allRecords, setAllRecords] = React.useState<LoanRecord[]>([]);
   const [recentRecords, setRecentRecords] = React.useState<LoanRecord[]>([]);
+  const [recordFilter, setRecordFilter] = React.useState<DashboardRecordFilter | null>('open');
+  const [recentExpanded, setRecentExpanded] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const compactWeb = Platform.OS === 'web' && width < 820;
 
@@ -232,6 +254,9 @@ export default function AccountDashboardScreen() {
             .sort((a, b) => getTimestamp(b.created_at) - getTimestamp(a.created_at))
             .slice(0, 5)
         );
+        setAllRecords(
+          [...openLoans].sort((a, b) => getTimestamp(b.created_at) - getTimestamp(a.created_at))
+        );
       } catch (error: any) {
         console.error('web dashboard load failed:', error?.message || error);
       } finally {
@@ -307,6 +332,30 @@ export default function AccountDashboardScreen() {
     );
   }
 
+  const filteredRecords = allRecords.filter((record) => {
+    if (recordFilter === 'lent') {
+      return record.category === 'money' && record.type === 'lent' && record.status !== 'paid';
+    }
+    if (recordFilter === 'borrowed') {
+      return record.category === 'money' && record.type === 'borrowed' && record.status !== 'paid';
+    }
+    if (recordFilter === 'active') {
+      return ['active', 'partial', 'overdue'].includes(String(record.status || '').toLowerCase());
+    }
+    if (recordFilter === 'dueSoon') {
+      if (record.status !== 'active' || !record.due_date) return false;
+      const due = new Date(`${record.due_date}T12:00:00`);
+      if (Number.isNaN(due.getTime())) return false;
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const nextWeek = new Date(now);
+      nextWeek.setDate(now.getDate() + 7);
+      return due.getTime() >= now.getTime() && due.getTime() <= nextWeek.getTime();
+    }
+
+    return record.category === 'money' ? record.status !== 'paid' : true;
+  });
+
   return (
     <WebAccountLayout
       eyebrow="Dashboard"
@@ -319,70 +368,197 @@ export default function AccountDashboardScreen() {
         <Card style={[styles.panelCard, compactWeb && styles.panelCardCompact]}>
           <Text style={styles.panelTitle}>Balance snapshot</Text>
           <RNView style={[styles.balanceRow, compactWeb && styles.stackGridTight]}>
-            <RNView style={[styles.balanceMetric, compactWeb && styles.metricCompact]}>
+            <Pressable
+              style={({ hovered, pressed }) => [
+                styles.balanceMetric,
+                styles.interactiveSurface,
+                compactWeb && styles.metricCompact,
+                hovered && styles.interactiveSurfaceHovered,
+                pressed && styles.interactiveSurfacePressed,
+              ]}
+              onPress={() => setRecordFilter('lent')}
+            >
               <RNView style={[styles.balanceIcon, styles.balanceIconGreen]}>
                 <ArrowUpRight size={16} color="#047857" />
               </RNView>
               <Text style={styles.balanceLabel}>They owe you</Text>
               <Text style={styles.balanceValue}>{formatCurrency(stats.lent)}</Text>
-            </RNView>
-            <RNView style={[styles.balanceMetric, compactWeb && styles.metricCompact]}>
+            </Pressable>
+            <Pressable
+              style={({ hovered, pressed }) => [
+                styles.balanceMetric,
+                styles.interactiveSurface,
+                compactWeb && styles.metricCompact,
+                hovered && styles.interactiveSurfaceHovered,
+                pressed && styles.interactiveSurfacePressed,
+              ]}
+              onPress={() => setRecordFilter('borrowed')}
+            >
               <RNView style={[styles.balanceIcon, styles.balanceIconRed]}>
                 <ArrowDownLeft size={16} color="#B91C1C" />
               </RNView>
               <Text style={styles.balanceLabel}>You owe</Text>
               <Text style={styles.balanceValue}>{formatCurrency(stats.borrowed)}</Text>
-            </RNView>
+            </Pressable>
           </RNView>
         </Card>
 
       </RNView>
 
       <RNView style={[styles.statsGrid, compactWeb && styles.stackGrid]}>
-        <Card style={[styles.statCard, compactWeb && styles.statCardCompact]}>
-          <RNView style={styles.statTopRow}>
-            <RNView style={[styles.statIconWrap, styles.statIconDark]}>
-              <Wallet size={18} color="#0F172A" />
+        <Pressable
+          onPress={() => setRecordFilter('open')}
+          style={({ hovered, pressed }) => [
+            styles.statCardButton,
+            styles.interactiveSurface,
+            compactWeb && styles.statCardButtonCompact,
+            hovered && styles.interactiveSurfaceHovered,
+            pressed && styles.interactiveSurfacePressed,
+          ]}
+        >
+          <Card style={[styles.statCard, compactWeb && styles.statCardCompact]}>
+            <RNView style={styles.statTopRow}>
+              <RNView style={[styles.statIconWrap, styles.statIconDark]}>
+                <Wallet size={18} color="#0F172A" />
+              </RNView>
+              <Text style={styles.statEyebrow}>Open balance</Text>
             </RNView>
-            <Text style={styles.statEyebrow}>Open balance</Text>
-          </RNView>
-          <Text style={styles.statValue}>{formatCurrency(stats.openBalance)}</Text>
-          <Text style={styles.statMeta}>Net across your open money records</Text>
-        </Card>
+            <Text style={styles.statValue}>{formatCurrency(stats.openBalance)}</Text>
+            <Text style={styles.statMeta}>Net across your open money records</Text>
+          </Card>
+        </Pressable>
 
-        <Card style={[styles.statCard, compactWeb && styles.statCardCompact]}>
-          <RNView style={styles.statTopRow}>
-            <RNView style={[styles.statIconWrap, styles.statIconBlue]}>
-              <Sparkles size={18} color="#1D4ED8" />
+        <Pressable
+          onPress={() => setRecordFilter('active')}
+          style={({ hovered, pressed }) => [
+            styles.statCardButton,
+            styles.interactiveSurface,
+            compactWeb && styles.statCardButtonCompact,
+            hovered && styles.interactiveSurfaceHovered,
+            pressed && styles.interactiveSurfacePressed,
+          ]}
+        >
+          <Card style={[styles.statCard, compactWeb && styles.statCardCompact]}>
+            <RNView style={styles.statTopRow}>
+              <RNView style={[styles.statIconWrap, styles.statIconBlue]}>
+                <Sparkles size={18} color="#1D4ED8" />
+              </RNView>
+              <Text style={styles.statEyebrow}>Active records</Text>
             </RNView>
-            <Text style={styles.statEyebrow}>Active records</Text>
-          </RNView>
-          <Text style={styles.statValue}>{stats.activeRecords}</Text>
-          <Text style={styles.statMeta}>Live records still in progress</Text>
-        </Card>
+            <Text style={styles.statValue}>{stats.activeRecords}</Text>
+            <Text style={styles.statMeta}>Live records still in progress</Text>
+          </Card>
+        </Pressable>
 
-        <Card style={[styles.statCard, compactWeb && styles.statCardCompact]}>
-          <RNView style={styles.statTopRow}>
-            <RNView style={[styles.statIconWrap, styles.statIconAmber]}>
-              <Bell size={18} color="#B45309" />
+        <Pressable
+          onPress={() => router.push('/requests')}
+          style={({ hovered, pressed }) => [
+            styles.statCardButton,
+            styles.interactiveSurface,
+            compactWeb && styles.statCardButtonCompact,
+            hovered && styles.interactiveSurfaceHovered,
+            pressed && styles.interactiveSurfacePressed,
+          ]}
+        >
+          <Card style={[styles.statCard, compactWeb && styles.statCardCompact]}>
+            <RNView style={styles.statTopRow}>
+              <RNView style={[styles.statIconWrap, styles.statIconAmber]}>
+                <Bell size={18} color="#B45309" />
+              </RNView>
+              <Text style={styles.statEyebrow}>Pending requests</Text>
             </RNView>
-            <Text style={styles.statEyebrow}>Pending requests</Text>
-          </RNView>
-          <Text style={styles.statValue}>{stats.pendingRequests}</Text>
-          <Text style={styles.statMeta}>Items waiting for your confirmation</Text>
-        </Card>
+            <Text style={styles.statValue}>{stats.pendingRequests}</Text>
+            <Text style={styles.statMeta}>Items waiting for your confirmation</Text>
+          </Card>
+        </Pressable>
 
-        <Card style={[styles.statCard, compactWeb && styles.statCardCompact]}>
-          <RNView style={styles.statTopRow}>
-            <RNView style={[styles.statIconWrap, styles.statIconGreen]}>
-              <Clock3 size={18} color="#047857" />
+        <Pressable
+          onPress={() => setRecordFilter('dueSoon')}
+          style={({ hovered, pressed }) => [
+            styles.statCardButton,
+            styles.interactiveSurface,
+            compactWeb && styles.statCardButtonCompact,
+            hovered && styles.interactiveSurfaceHovered,
+            pressed && styles.interactiveSurfacePressed,
+          ]}
+        >
+          <Card style={[styles.statCard, compactWeb && styles.statCardCompact]}>
+            <RNView style={styles.statTopRow}>
+              <RNView style={[styles.statIconWrap, styles.statIconGreen]}>
+                <Clock3 size={18} color="#047857" />
+              </RNView>
+              <Text style={styles.statEyebrow}>Due soon</Text>
             </RNView>
-            <Text style={styles.statEyebrow}>Due soon</Text>
-          </RNView>
-          <Text style={styles.statValue}>{stats.dueSoon}</Text>
-          <Text style={styles.statMeta}>Next 7 days</Text>
-        </Card>
+            <Text style={styles.statValue}>{stats.dueSoon}</Text>
+            <Text style={styles.statMeta}>Next 7 days</Text>
+          </Card>
+        </Pressable>
       </RNView>
+
+      <Card style={[styles.panelCard, compactWeb && styles.panelCardCompact]}>
+        <RNView style={[styles.recentHeader, compactWeb && styles.recentHeaderCompact]}>
+          <RNView>
+            <Text style={styles.panelTitle}>Open records</Text>
+            <Text style={styles.panelBody}>
+              {getFilterLabel(recordFilter)}: {filteredRecords.length}
+            </Text>
+          </RNView>
+          <Pressable
+            onPress={() => setRecordFilter('open')}
+            style={({ hovered, pressed }) => [
+              styles.inlineActionButton,
+              hovered && styles.inlineActionButtonHovered,
+              pressed && styles.inlineActionButtonPressed,
+            ]}
+          >
+            <Text style={styles.refreshText}>Show all</Text>
+          </Pressable>
+        </RNView>
+
+        {loading ? (
+          <RNView style={styles.loadingState}>
+            <ActivityIndicator size="small" color="#4F46E5" />
+            <Text style={styles.loadingText}>Loading records...</Text>
+          </RNView>
+        ) : filteredRecords.length === 0 ? (
+          <RNView style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No records match this view.</Text>
+            <Text style={styles.emptyText}>
+              Choose another metric or create a new record to populate this section.
+            </Text>
+          </RNView>
+        ) : (
+          filteredRecords.map((record) => (
+            <Pressable
+              key={record.id}
+              style={({ hovered, pressed }) => [
+                styles.recordRow,
+                styles.interactiveSurface,
+                compactWeb && styles.recordRowCompact,
+                hovered && styles.interactiveSurfaceHovered,
+                pressed && styles.interactiveSurfacePressed,
+              ]}
+              onPress={() => router.push(`/loan/${record.id}`)}
+            >
+              <RNView style={styles.recordCopy}>
+                <Text style={styles.recordName}>{record.contacts?.name || 'Unknown contact'}</Text>
+                <Text style={styles.recordMeta}>
+                  {record.category === 'item'
+                    ? 'Item record'
+                    : record.type === 'lent'
+                      ? 'Lent record'
+                      : 'Borrowed record'}
+                </Text>
+                <Text style={styles.recordSubmeta}>{getDueLabel(record.due_date)}</Text>
+              </RNView>
+              <RNView style={[styles.recordValueBlock, compactWeb && styles.recordValueBlockCompact]}>
+                <Text style={styles.recordValue}>{getRecordValue(record)}</Text>
+                <Text style={styles.recordStatus}>{record.status}</Text>
+              </RNView>
+            </Pressable>
+          ))
+        )}
+      </Card>
 
       <Card style={[styles.panelCard, compactWeb && styles.panelCardCompact]}>
         <Text style={styles.panelTitle}>Run the app from here</Text>
@@ -425,15 +601,31 @@ export default function AccountDashboardScreen() {
       <Card style={[styles.panelCard, compactWeb && styles.panelCardCompact]}>
         <RNView style={[styles.recentHeader, compactWeb && styles.recentHeaderCompact]}>
           <Text style={styles.panelTitle}>Recent records</Text>
-          <TouchableOpacity onPress={() => void loadDashboard()}>
-            <Text style={styles.refreshText}>Refresh</Text>
-          </TouchableOpacity>
+          <Pressable
+            onPress={() => setRecentExpanded((current) => !current)}
+            style={({ hovered, pressed }) => [
+              styles.sectionToggle,
+              styles.interactiveButtonInline,
+              hovered && styles.inlineActionButtonHovered,
+              pressed && styles.inlineActionButtonPressed,
+            ]}
+          >
+            <Text style={styles.refreshText}>{recentExpanded ? 'Hide' : `${recentRecords.length} records`}</Text>
+            {recentExpanded ? <ChevronUp size={16} color="#4F46E5" /> : <ChevronDown size={16} color="#4F46E5" />}
+          </Pressable>
         </RNView>
 
         {loading ? (
           <RNView style={styles.loadingState}>
             <ActivityIndicator size="small" color="#4F46E5" />
             <Text style={styles.loadingText}>Loading your web workspace...</Text>
+          </RNView>
+        ) : !recentExpanded ? (
+          <RNView style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>Recent records are minimized.</Text>
+            <Text style={styles.emptyText}>
+              Expand this section when you want to review the latest activity across your records.
+            </Text>
           </RNView>
         ) : (
           <>
@@ -446,10 +638,15 @@ export default function AccountDashboardScreen() {
               </RNView>
             ) : (
               recentRecords.map((record) => (
-                <TouchableOpacity
+                <Pressable
                   key={record.id}
-                  style={[styles.recordRow, compactWeb && styles.recordRowCompact]}
-                  activeOpacity={0.88}
+                  style={({ hovered, pressed }) => [
+                    styles.recordRow,
+                    styles.interactiveSurface,
+                    compactWeb && styles.recordRowCompact,
+                    hovered && styles.interactiveSurfaceHovered,
+                    pressed && styles.interactiveSurfacePressed,
+                  ]}
                   onPress={() => router.push(`/loan/${record.id}`)}
                 >
                   <RNView style={styles.recordCopy}>
@@ -463,7 +660,7 @@ export default function AccountDashboardScreen() {
                     <Text style={styles.recordValue}>{getRecordValue(record)}</Text>
                     <Text style={styles.recordStatus}>{record.status}</Text>
                   </RNView>
-                </TouchableOpacity>
+                </Pressable>
               ))
             )}
           </>
@@ -479,6 +676,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  interactiveSurface: {
+    ...(Platform.OS === 'web'
+      ? ({
+          cursor: 'pointer',
+          userSelect: 'none',
+          transitionDuration: '150ms',
+          transitionTimingFunction: 'ease',
+          transitionProperty: 'transform, opacity, background-color, border-color, box-shadow',
+        } as any)
+      : null),
+  },
+  interactiveSurfaceHovered: {
+    transform: [{ translateY: -2 }, { scale: 1.01 }],
+    opacity: 0.99,
+  },
+  interactiveSurfacePressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.94,
+  },
+  interactiveButtonInline: {
+    ...(Platform.OS === 'web'
+      ? ({
+          cursor: 'pointer',
+          userSelect: 'none',
+          transitionDuration: '140ms',
+          transitionTimingFunction: 'ease',
+          transitionProperty: 'transform, opacity, background-color',
+        } as any)
+      : null),
   },
   statsGrid: {
     flexDirection: 'row',
@@ -496,6 +723,15 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 220,
     padding: 20,
+  },
+  statCardButton: {
+    flex: 1,
+    minWidth: 220,
+  },
+  statCardButtonCompact: {
+    width: '100%',
+    minWidth: 0,
+    flex: 0,
   },
   statCardCompact: {
     width: '100%',
@@ -544,6 +780,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     color: '#64748B',
+  },
+  sectionToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  inlineActionButton: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  inlineActionButtonHovered: {
+    backgroundColor: '#EEF2FF',
+    transform: [{ translateY: -1 }],
+  },
+  inlineActionButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.985 }],
   },
   splitGrid: {
     flexDirection: 'row',

@@ -16,7 +16,7 @@ export default function TabLayout() {
   const { user, initialized, planTier } = useAuthStore();
 
   if (initialized && !user) {
-    return <Redirect href="/" />;
+    return <Redirect href={Platform.OS === 'web' ? '/(auth)/login' : '/'} />;
   }
 
   const currentTabSegment = segments[1];

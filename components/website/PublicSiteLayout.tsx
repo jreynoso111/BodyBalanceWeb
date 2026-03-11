@@ -65,6 +65,8 @@ export function PublicSiteLayout({
   const { width } = useWindowDimensions();
   const pathname = usePathname() || '/';
   const user = useAuthStore((state) => state.user);
+  const initialized = useAuthStore((state) => state.initialized);
+  const hasReadySession = initialized && !!user;
   const mobile = width < 640;
   const tablet = width < 900;
   const compact = width < 1080;
@@ -133,16 +135,16 @@ export function PublicSiteLayout({
                   </Link>
                 );
               })}
-              <Link href={user ? '/dashboard' : '/(auth)/login'} asChild>
+              <Link href={hasReadySession ? '/dashboard' : '/(auth)/login'} asChild>
                 <Pressable
                   style={StyleSheet.flatten([
                     styles.accountLink,
                     mobile && styles.accountLinkMobile,
-                    user && styles.accountLinkActive,
+                    hasReadySession && styles.accountLinkActive,
                   ])}
                 >
-                  <Text style={[styles.accountLabel, user && styles.accountLabelActive]}>
-                    {user ? 'Dashboard' : 'Sign in'}
+                  <Text style={[styles.accountLabel, hasReadySession && styles.accountLabelActive]}>
+                    {hasReadySession ? 'Dashboard' : 'Sign in'}
                   </Text>
                 </Pressable>
               </Link>

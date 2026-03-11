@@ -30,15 +30,13 @@ interface AdminPlanUser {
   full_name: string | null;
   email: string | null;
   plan_tier: string | null;
+  premium_referral_expires_at: string | null;
+  last_premium_granted_at: string | null;
   updated_at: string | null;
 }
 
 type StatsLoadMode = 'full' | 'fallback';
 const ADMIN_RPC_TIMEOUT_MS = 4000;
-
-function formatMoney(value?: number | null) {
-  return `$${Math.round(Number(value || 0)).toLocaleString()}`;
-}
 
 function formatPercent(numerator: number, denominator: number) {
   if (!denominator) return '0%';
@@ -52,6 +50,7 @@ function uniqueCount(values: Array<string | null | undefined>) {
 export default function AdminDashboardIndex() {
   const { width } = useWindowDimensions();
   const router = useRouter();
+  const isWeb = Platform.OS === 'web';
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [planUsers, setPlanUsers] = useState<AdminPlanUser[]>([]);
   const [planSearch, setPlanSearch] = useState('');
@@ -61,7 +60,9 @@ export default function AdminDashboardIndex() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [statsLoadMode, setStatsLoadMode] = useState<StatsLoadMode>('full');
-  const compactWeb = Platform.OS === 'web' && width < 760;
+  const compactWeb = Platform.OS === 'web' && width < 860;
+  const condensedWeb = Platform.OS === 'web' && width < 1240;
+  const wideWeb = Platform.OS === 'web' && width >= 1360;
 
   useEffect(() => {
     void fetchStats();
@@ -89,8 +90,7 @@ export default function AdminDashboardIndex() {
 
     const [
       totalUsersResult,
-      premiumUsersResult,
-      freeUsersResult,
+      premiumProfilesResult,
       totalLoansResult,
       activeLoansResult,
       openMoneyLoansResult,
@@ -103,19 +103,14 @@ export default function AdminDashboardIndex() {
       profileCreates30dResult,
       auditLogs7dResult,
       auditLogs30dResult,
-      premiumChanges7dResult,
     ] = await Promise.all([
       withTimeout(
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         'profiles total count'
       ),
       withTimeout(
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('plan_tier', 'premium'),
-        'profiles premium count'
-      ),
-      withTimeout(
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).not('plan_tier', 'eq', 'premium'),
-        'profiles free count'
+        supabase.from('profiles').select('plan_tier, premium_referral_expires_at, last_premium_granted_at'),
+        'profiles premium state'
       ),
       withTimeout(
         supabase.from('loans').select('id', { count: 'exact', head: true }).is('deleted_at', null),
@@ -165,16 +160,11 @@ export default function AdminDashboardIndex() {
         supabase.from('audit_logs').select('actor_user_id').gte('created_at', thirtyDaysAgo),
         'audit logs 30d'
       ),
-      withTimeout(
-        supabase.from('audit_logs').select('old_row, new_row').eq('table_name', 'profiles').eq('operation', 'UPDATE').gte('created_at', sevenDaysAgo),
-        'premium upgrades 7d'
-      ),
     ]);
 
     const queryErrors = [
       totalUsersResult.error,
-      premiumUsersResult.error,
-      freeUsersResult.error,
+      premiumProfilesResult.error,
       totalLoansResult.error,
       activeLoansResult.error,
       openMoneyLoansResult.error,
@@ -187,7 +177,6 @@ export default function AdminDashboardIndex() {
       profileCreates30dResult.error,
       auditLogs7dResult.error,
       auditLogs30dResult.error,
-      premiumChanges7dResult.error,
     ].filter(Boolean);
 
     if (queryErrors.length > 0) {
@@ -199,10 +188,19 @@ export default function AdminDashboardIndex() {
       0
     );
 
-    const premiumNew7d = ((premiumChanges7dResult.data || []) as Array<{ old_row?: any; new_row?: any }>).filter((entry) => {
-      const previousPlan = String(entry.old_row?.plan_tier || 'free').toLowerCase();
-      const nextPlan = String(entry.new_row?.plan_tier || 'free').toLowerCase();
-      return previousPlan !== 'premium' && nextPlan === 'premium';
+    const premiumProfiles = (premiumProfilesResult.data || []) as Array<{
+      plan_tier?: string | null;
+      premium_referral_expires_at?: string | null;
+      last_premium_granted_at?: string | null;
+    }>;
+    const premiumUsers = premiumProfiles.filter((entry) =>
+      normalizePlanTier(entry.plan_tier, entry.premium_referral_expires_at) === 'premium'
+    ).length;
+    const premiumNew7d = premiumProfiles.filter((entry) => {
+      if (!entry.last_premium_granted_at) return false;
+      const grantedAt = new Date(entry.last_premium_granted_at).getTime();
+      if (Number.isNaN(grantedAt)) return false;
+      return grantedAt >= new Date(sevenDaysAgo).getTime();
     }).length;
 
     return {
@@ -211,8 +209,8 @@ export default function AdminDashboardIndex() {
       new_users_30d: profileCreates30dResult.count || 0,
       active_users_7d: uniqueCount(((auditLogs7dResult.data || []) as Array<{ actor_user_id?: string | null }>).map((entry) => entry.actor_user_id)),
       active_users_30d: uniqueCount(((auditLogs30dResult.data || []) as Array<{ actor_user_id?: string | null }>).map((entry) => entry.actor_user_id)),
-      premium_users: premiumUsersResult.count || 0,
-      free_users: freeUsersResult.count || 0,
+      premium_users: premiumUsers,
+      free_users: Math.max((totalUsersResult.count || 0) - premiumUsers, 0),
       premium_new_7d: premiumNew7d,
       total_loans: totalLoansResult.count || 0,
       active_loans: activeLoansResult.count || 0,
@@ -233,10 +231,16 @@ export default function AdminDashboardIndex() {
       const usersPromise = withTimeout(
         supabase
           .from('profiles')
-          .select('id, full_name, email, plan_tier, updated_at')
+          .select('id, full_name, email, plan_tier, premium_referral_expires_at, last_premium_granted_at, updated_at')
           .order('updated_at', { ascending: false })
           .limit(40),
         'admin users list'
+      );
+      const premiumProfilesPromise = withTimeout(
+        supabase
+          .from('profiles')
+          .select('plan_tier, premium_referral_expires_at, last_premium_granted_at'),
+        'profiles premium snapshot'
       );
       const fallbackStatsPromise = buildFallbackStats();
 
@@ -257,7 +261,33 @@ export default function AdminDashboardIndex() {
       }
 
       const usersResult = await usersPromise;
+      const premiumProfilesResult = await premiumProfilesPromise;
       if (usersResult.error) throw usersResult.error;
+      if (premiumProfilesResult.error) throw premiumProfilesResult.error;
+
+      const premiumProfiles = (premiumProfilesResult.data || []) as Array<{
+        plan_tier?: string | null;
+        premium_referral_expires_at?: string | null;
+        last_premium_granted_at?: string | null;
+      }>;
+      const premiumUsers = premiumProfiles.filter((entry) =>
+        normalizePlanTier(entry.plan_tier, entry.premium_referral_expires_at) === 'premium'
+      ).length;
+      const premiumNew7d = premiumProfiles.filter((entry) => {
+        if (!entry.last_premium_granted_at) return false;
+        const grantedAt = new Date(entry.last_premium_granted_at).getTime();
+        if (Number.isNaN(grantedAt)) return false;
+        return grantedAt >= Date.now() - 7 * 24 * 60 * 60 * 1000;
+      }).length;
+
+      if (nextStats) {
+        nextStats = {
+          ...nextStats,
+          premium_users: premiumUsers,
+          free_users: Math.max((nextStats.total_users || 0) - premiumUsers, 0),
+          premium_new_7d: premiumNew7d,
+        };
+      }
 
       setStats(nextStats);
       setPlanUsers((usersResult.data || []) as AdminPlanUser[]);
@@ -282,6 +312,84 @@ export default function AdminDashboardIndex() {
     0
   );
 
+  const overviewMetrics = [
+    {
+      key: 'users',
+      label: 'Users',
+      value: stats?.total_users || 0,
+      meta: `${stats?.new_users_7d || 0} new in 7 days`,
+      icon: Users,
+      iconColor: '#6366F1',
+      iconBg: 'rgba(99,102,241,0.12)',
+    },
+    {
+      key: 'premium',
+      label: 'Premium',
+      value: stats?.premium_users || 0,
+      meta: `${adoption.premiumShare} of all users`,
+      icon: Crown,
+      iconColor: '#CA8A04',
+      iconBg: 'rgba(234,179,8,0.14)',
+    },
+    {
+      key: 'active-users',
+      label: 'Active Users',
+      value: stats?.active_users_7d || 0,
+      meta: 'active in last 7 days',
+      icon: TrendingUp,
+      iconColor: '#10B981',
+      iconBg: 'rgba(16,185,129,0.12)',
+    },
+    {
+      key: 'records',
+      label: 'Shared Records',
+      value: stats?.total_loans || 0,
+      meta: `${stats?.active_loans || 0} active right now`,
+      icon: Wallet,
+      iconColor: '#0284C7',
+      iconBg: 'rgba(56,189,248,0.14)',
+    },
+  ];
+
+  const growthUsageMetrics = [
+    { key: 'new-users', label: 'New users', value: stats?.new_users_30d || 0, meta: 'Last 30 days' },
+    { key: 'premium-upgrades', label: 'Premium upgrades', value: stats?.premium_new_7d || 0, meta: 'Last 7 days' },
+    { key: 'active-30d', label: 'Active users', value: stats?.active_users_30d || 0, meta: 'Last 30 days' },
+    { key: 'records-created', label: 'Records created', value: stats?.records_created_7d || 0, meta: 'Last 7 days' },
+    { key: 'payments-logged', label: 'Payments logged', value: stats?.payments_logged_7d || 0, meta: 'Last 7 days' },
+    { key: 'push-opt-in', label: 'Push opt-in', value: stats?.push_enabled_users || 0, meta: `${adoption.pushShare} of users` },
+  ];
+
+  const queueMetrics = [
+    {
+      key: 'confirmations',
+      label: 'Pending confirmations',
+      value: pendingAdminConfirmations,
+      meta: 'Pending shared-record actions',
+      route: '/admin/requests?filter=confirmations',
+      icon: BellRing,
+      iconColor: '#6366F1',
+    },
+    {
+      key: 'friend-requests',
+      label: 'Friend requests',
+      value: stats?.pending_friend_requests || 0,
+      meta: 'Still waiting for approval',
+      route: '/admin/requests?filter=friend_requests',
+      icon: Users,
+      iconColor: '#CA8A04',
+    },
+    {
+      key: 'total-records',
+      label: 'Total records',
+      value: stats?.total_loans || 0,
+      meta: 'Open full records admin',
+      route: '/admin/loans',
+      icon: Wallet,
+      iconColor: '#10B981',
+    },
+  ];
+
   const filteredPlanUsers = useMemo(() => {
     const query = planSearch.trim().toLowerCase();
     if (!query) return planUsers.slice(0, 8);
@@ -305,11 +413,21 @@ export default function AdminDashboardIndex() {
       if (error) throw error;
 
       setPlanUsers((current) =>
-        current.map((item) => (item.id === userId ? { ...item, plan_tier: nextPlan } : item))
+        current.map((item) => (
+          item.id === userId
+            ? {
+                ...item,
+                plan_tier: nextPlan,
+                premium_referral_expires_at: nextPlan === 'free' ? null : item.premium_referral_expires_at,
+                last_premium_granted_at: nextPlan === 'premium' ? new Date().toISOString() : item.last_premium_granted_at,
+              }
+            : item
+        ))
       );
       setStats((current) => {
         if (!current) return current;
-        const currentPlan = normalizePlanTier(planUsers.find((item) => item.id === userId)?.plan_tier);
+        const currentUser = planUsers.find((item) => item.id === userId);
+        const currentPlan = normalizePlanTier(currentUser?.plan_tier, currentUser?.premium_referral_expires_at);
         if (currentPlan === nextPlan) return current;
 
         if (nextPlan === 'premium') {
@@ -334,6 +452,13 @@ export default function AdminDashboardIndex() {
   };
 
   if (loading && !refreshing) {
+    if (isWeb) {
+      return (
+        <View style={[styles.container, styles.center]}>
+          <ActivityIndicator size="large" color="#6366F1" />
+        </View>
+      );
+    }
     return (
       <Screen style={[styles.container, styles.center]} safeAreaEdges={['left', 'right', 'bottom']}>
         <ActivityIndicator size="large" color="#6366F1" />
@@ -342,6 +467,17 @@ export default function AdminDashboardIndex() {
   }
 
   if (error) {
+    if (isWeb) {
+      return (
+        <View style={[styles.container, styles.center]}>
+          <AlertCircle size={48} color="#EF4444" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity onPress={() => void fetchStats()} style={styles.retryBtn}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     return (
       <Screen style={[styles.container, styles.center]} safeAreaEdges={['left', 'right', 'bottom']}>
         <AlertCircle size={48} color="#EF4444" />
@@ -353,13 +489,8 @@ export default function AdminDashboardIndex() {
     );
   }
 
-  return (
-    <Screen style={styles.container} safeAreaEdges={['left', 'right', 'bottom']}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        contentInsetAdjustmentBehavior="never"
-        automaticallyAdjustContentInsets={false}
-      >
+  const content = (
+    <>
         <View style={[styles.topRow, compactWeb && styles.topRowCompact]}>
           <TouchableOpacity
             style={styles.backToAppButton}
@@ -373,8 +504,6 @@ export default function AdminDashboardIndex() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.title}>Admin Analytics</Text>
-        <Text style={styles.subtitle}>Growth, premium conversion, user activity, and operational load from the live backend.</Text>
         {statsLoadMode === 'fallback' ? (
           <Card style={styles.noticeCard}>
             <Text style={styles.noticeText}>
@@ -384,307 +513,260 @@ export default function AdminDashboardIndex() {
         ) : null}
 
         <View style={styles.heroGrid}>
-          <Card style={[styles.heroCard, compactWeb && styles.heroCardCompact]}>
-            <View style={[styles.heroIcon, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
-              <Users size={22} color="#6366F1" />
-            </View>
-            <Text style={styles.heroLabel}>Users</Text>
-            <Text style={styles.heroValue}>{stats?.total_users || 0}</Text>
-            <Text style={styles.heroMeta}>{stats?.new_users_7d || 0} new in 7 days</Text>
-          </Card>
-
-          <Card style={[styles.heroCard, compactWeb && styles.heroCardCompact]}>
-            <View style={[styles.heroIcon, { backgroundColor: 'rgba(234,179,8,0.14)' }]}>
-              <Crown size={22} color="#CA8A04" />
-            </View>
-            <Text style={styles.heroLabel}>Premium</Text>
-            <Text style={styles.heroValue}>{stats?.premium_users || 0}</Text>
-            <Text style={styles.heroMeta}>{adoption.premiumShare} of all users</Text>
-          </Card>
-
-          <Card style={[styles.heroCard, compactWeb && styles.heroCardCompact]}>
-            <View style={[styles.heroIcon, { backgroundColor: 'rgba(16,185,129,0.12)' }]}>
-              <TrendingUp size={22} color="#10B981" />
-            </View>
-            <Text style={styles.heroLabel}>Active Users</Text>
-            <Text style={styles.heroValue}>{stats?.active_users_7d || 0}</Text>
-            <Text style={styles.heroMeta}>active in last 7 days</Text>
-          </Card>
-
-          <Card style={[styles.heroCard, compactWeb && styles.heroCardCompact]}>
-            <View style={[styles.heroIcon, { backgroundColor: 'rgba(56,189,248,0.14)' }]}>
-              <Wallet size={22} color="#0284C7" />
-            </View>
-            <Text style={styles.heroLabel}>Open Balance</Text>
-            <Text style={styles.heroValueSmall}>{formatMoney(stats?.money_in_transit)}</Text>
-            <Text style={styles.heroMeta}>{stats?.active_loans || 0} active records</Text>
-          </Card>
+          {overviewMetrics.map((metric) => {
+            const Icon = metric.icon;
+            return (
+              <Card key={metric.key} style={[styles.heroCard, condensedWeb && styles.heroCardCondensed, compactWeb && styles.heroCardCompact]}>
+                <View style={[styles.heroIcon, { backgroundColor: metric.iconBg }]}>
+                  <Icon size={20} color={metric.iconColor} />
+                </View>
+                <Text style={styles.heroLabel}>{metric.label}</Text>
+                <Text style={styles.heroValue}>{metric.value}</Text>
+                <Text style={styles.heroMeta}>{metric.meta}</Text>
+              </Card>
+            );
+          })}
         </View>
 
-        <Text style={styles.sectionTitle}>Growth</Text>
-        <View style={styles.metricsRow}>
-          <Card style={styles.metricCard}>
-            <Text style={styles.metricLabel}>New users</Text>
-            <Text style={styles.metricValue}>{stats?.new_users_30d || 0}</Text>
-            <Text style={styles.metricMeta}>Last 30 days</Text>
-          </Card>
-          <Card style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Premium upgrades</Text>
-            <Text style={styles.metricValue}>{stats?.premium_new_7d || 0}</Text>
-            <Text style={styles.metricMeta}>Last 7 days</Text>
-          </Card>
-          <Card style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Active users</Text>
-            <Text style={styles.metricValue}>{stats?.active_users_30d || 0}</Text>
-            <Text style={styles.metricMeta}>Last 30 days</Text>
-          </Card>
-        </View>
-
-        <Text style={styles.sectionTitle}>Plans</Text>
-        <Card style={styles.planCard}>
-          <View style={[styles.planRow, compactWeb && styles.planRowCompact]}>
-            <View>
-              <Text style={styles.planTitle}>Premium users</Text>
-              <Text style={styles.planCaption}>{adoption.premiumShare} conversion from total users</Text>
-            </View>
-            <Text style={styles.planValue}>{stats?.premium_users || 0}</Text>
-          </View>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: adoption.premiumShare as any }]} />
-          </View>
-          <View style={[styles.planBreakdownRow, compactWeb && styles.planBreakdownRowCompact]}>
-            <Text style={styles.planBreakdownText}>Free: {stats?.free_users || 0}</Text>
-            <Text style={styles.planBreakdownText}>Premium: {stats?.premium_users || 0}</Text>
-          </View>
-        </Card>
-
-        <Text style={styles.sectionTitle}>Managed Premium</Text>
-        <Card style={styles.managedPlanCard}>
-          <View style={[styles.managedPlanHeader, compactWeb && styles.managedPlanHeaderCompact]}>
-            <View style={styles.managedPlanCopy}>
-              <Text style={styles.managedPlanTitle}>Membership control inside the dashboard</Text>
-              <Text style={styles.managedPlanText}>Search a user and switch their tier without opening a separate screen.</Text>
-            </View>
-            <View style={[styles.managedPlanSummary, compactWeb && styles.managedPlanSummaryCompact]}>
-              <Text style={styles.managedPlanSummaryValue}>{stats?.premium_users || 0}</Text>
-              <Text style={styles.managedPlanSummaryLabel}>premium</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.managedPlanToggle, compactWeb && styles.managedPlanToggleCompact]}
-            activeOpacity={0.85}
-            onPress={() => setPlanUsersExpanded((current) => !current)}
-          >
-            <View style={styles.managedPlanToggleCopy}>
-              <Text style={styles.managedPlanToggleTitle}>
-                {planUsersExpanded ? 'Hide managed users' : 'Show managed users'}
-              </Text>
-              <Text style={styles.managedPlanToggleText}>
-                {planUsersExpanded
-                  ? 'Collapse the list to keep the dashboard compact.'
-                  : `${filteredPlanUsers.length} users ready to review without filling the screen.`}
-              </Text>
-            </View>
-            {planUsersExpanded ? <ChevronUp size={18} color="#475569" /> : <ChevronDown size={18} color="#475569" />}
-          </TouchableOpacity>
-
-          {planUsersExpanded ? (
-            <>
-              <View style={styles.planSearchBar}>
-                <Search size={16} color="#94A3B8" />
-                <TextInput
-                  value={planSearch}
-                  onChangeText={setPlanSearch}
-                  placeholder="Search by name or email..."
-                  placeholderTextColor="#94A3B8"
-                  style={styles.planSearchInput}
-                />
-              </View>
-
-              <View style={styles.planUsersList}>
-                {filteredPlanUsers.map((user) => {
-                  const normalizedPlan = normalizePlanTier(user.plan_tier);
-                  const isSaving = savingUserId === user.id;
-                  const displayName = user.full_name?.trim() || user.email || 'Unknown user';
-
-                  return (
-                    <View key={user.id} style={[styles.planUserRow, compactWeb && styles.planUserRowCompact]}>
-                      <View style={styles.planUserLeft}>
-                        <View style={[styles.planUserAvatar, normalizedPlan === 'premium' ? styles.planUserAvatarPremium : null]}>
-                          <Text style={[styles.planUserAvatarText, normalizedPlan === 'premium' ? styles.planUserAvatarTextPremium : null]}>
-                            {displayName[0]?.toUpperCase() || '?'}
-                          </Text>
-                        </View>
-                        <View style={styles.planUserInfo}>
-                          <Text style={styles.planUserName}>{displayName}</Text>
-                          <Text style={styles.planUserEmail}>{user.email || 'No email'}</Text>
-                        </View>
-                      </View>
-
-                      <View style={[styles.planUserRight, compactWeb && styles.planUserRightCompact]}>
-                        <Text style={[styles.inlinePlanBadge, normalizedPlan === 'premium' ? styles.inlinePlanBadgePremium : styles.inlinePlanBadgeFree]}>
-                          {getPlanLabel(normalizedPlan)}
-                        </Text>
-                        <View style={[styles.inlinePlanActions, compactWeb && styles.inlinePlanActionsCompact]}>
-                          <TouchableOpacity
-                            style={[styles.inlinePlanButton, normalizedPlan === 'free' ? styles.inlinePlanButtonActive : null]}
-                            disabled={isSaving || normalizedPlan === 'free'}
-                            onPress={() => void updatePlanTier(user.id, 'free')}
-                          >
-                            <Text style={[styles.inlinePlanButtonText, normalizedPlan === 'free' ? styles.inlinePlanButtonTextActive : null]}>Free</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={[styles.inlinePlanButton, normalizedPlan === 'premium' ? styles.inlinePlanButtonPremiumActive : null]}
-                            disabled={isSaving || normalizedPlan === 'premium'}
-                            onPress={() => void updatePlanTier(user.id, 'premium')}
-                          >
-                            <Text style={[styles.inlinePlanButtonText, normalizedPlan === 'premium' ? styles.inlinePlanButtonTextPremiumActive : null]}>
-                              {isSaving ? 'Saving...' : 'Premium'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
+        <View style={[styles.dashboardGrid, wideWeb && styles.dashboardGridWide]}>
+          <View style={styles.mainColumn}>
+            <View style={[styles.analyticsRow, condensedWeb && styles.analyticsRowCompact]}>
+              <Card style={[styles.panelCard, styles.analyticsPanel]}>
+                <View style={styles.panelHeader}>
+                  <Text style={styles.panelTitle}>Growth & Usage</Text>
+                  <Text style={styles.panelCaption}>Key account activity without personal balance data.</Text>
+                </View>
+                <View style={[styles.compactMetricsGrid, compactWeb && styles.compactMetricsGridCompact]}>
+                  {growthUsageMetrics.map((metric) => (
+                    <View key={metric.key} style={[styles.compactMetric, compactWeb && styles.compactMetricCompact]}>
+                      <Text style={styles.compactMetricLabel}>{metric.label}</Text>
+                      <Text style={styles.compactMetricValue}>{metric.value}</Text>
+                      <Text style={styles.compactMetricMeta}>{metric.meta}</Text>
                     </View>
-                  );
-                })}
+                  ))}
+                </View>
+              </Card>
 
-                {filteredPlanUsers.length === 0 ? (
-                  <View style={styles.planUsersEmpty}>
-                    <Text style={styles.planUsersEmptyText}>No users match that search.</Text>
+              <Card style={[styles.panelCard, styles.analyticsPanel]}>
+                <View style={styles.panelHeader}>
+                  <Text style={styles.panelTitle}>Notifications & Queue</Text>
+                  <Text style={styles.panelCaption}>Shortcuts into the operational backlog.</Text>
+                </View>
+                <View style={[styles.compactInteractiveGrid, compactWeb && styles.compactInteractiveGridCompact]}>
+                  {queueMetrics.map((metric) => {
+                    const Icon = metric.icon;
+                    return (
+                      <TouchableOpacity
+                        key={metric.key}
+                        activeOpacity={0.85}
+                        style={[styles.compactInteractiveCard, compactWeb && styles.compactInteractiveCardCompact]}
+                        onPress={() => router.push(metric.route as any)}
+                      >
+                        <View style={styles.compactInteractiveHeader}>
+                          <Icon size={15} color={metric.iconColor} />
+                          <Text style={styles.compactInteractiveLabel}>{metric.label}</Text>
+                        </View>
+                        <Text style={styles.compactInteractiveValue}>{metric.value}</Text>
+                        <View style={styles.compactInteractiveFooter}>
+                          <Text style={styles.compactInteractiveMeta}>{metric.meta}</Text>
+                          <ChevronRight size={15} color="#94A3B8" />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </Card>
+            </View>
+
+            <Card style={styles.panelCard}>
+              <View style={styles.panelHeader}>
+                <Text style={styles.panelTitle}>Management</Text>
+                <Text style={styles.panelCaption}>Fast access to the admin tools you actually use.</Text>
+              </View>
+              <View style={[styles.managementGrid, compactWeb && styles.managementGridCompact]}>
+                <TouchableOpacity style={styles.managementTile} onPress={() => router.push('/admin/users' as any)}>
+                  <View style={styles.menuItemLeft}>
+                    <View style={[styles.menuIcon, { backgroundColor: 'rgba(99, 102, 241, 0.1)' }]}>
+                      <Users size={20} color="#6366F1" />
+                    </View>
+                    <View style={styles.menuTextWrap}>
+                      <Text style={styles.menuLabel}>Users</Text>
+                      <Text style={styles.menuSub}>Advanced user admin: history, password reset, and deletes</Text>
+                    </View>
                   </View>
-                ) : null}
-              </View>
-            </>
-          ) : (
-            <View style={styles.managedPlanCollapsed}>
-              <Text style={styles.managedPlanCollapsedText}>
-                The membership list is collapsed by default so the admin dashboard stays readable.
-              </Text>
-            </View>
-          )}
-        </Card>
+                  <ChevronRight size={18} color="#94A3B8" />
+                </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>Usage</Text>
-        <View style={styles.metricsRow}>
-          <Card style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Records created</Text>
-            <Text style={styles.metricValue}>{stats?.records_created_7d || 0}</Text>
-            <Text style={styles.metricMeta}>Last 7 days</Text>
-          </Card>
-          <Card style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Payments logged</Text>
-            <Text style={styles.metricValue}>{stats?.payments_logged_7d || 0}</Text>
-            <Text style={styles.metricMeta}>Last 7 days</Text>
-          </Card>
-          <Card style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Push opt-in</Text>
-            <Text style={styles.metricValue}>{stats?.push_enabled_users || 0}</Text>
-            <Text style={styles.metricMeta}>{adoption.pushShare} of users</Text>
-          </Card>
-        </View>
-
-        <Text style={styles.sectionTitle}>Notifications & Queue</Text>
-        <View style={styles.metricsRow}>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => router.push('/admin/requests?filter=confirmations' as any)}
-          >
-            <Card style={[styles.metricCard, styles.metricCardInteractive]}>
-              <View style={styles.metricHeader}>
-                <BellRing size={16} color="#6366F1" />
-                <Text style={styles.metricLabel}>Pending confirmations</Text>
-              </View>
-              <Text style={styles.metricValue}>{pendingAdminConfirmations}</Text>
-              <Text style={styles.metricMeta}>Pending shared-record actions</Text>
-              <View style={styles.metricActionRow}>
-                <Text style={styles.metricActionText}>Open admin records</Text>
-                <ChevronRight size={16} color="#94A3B8" />
+                <TouchableOpacity style={styles.managementTile} onPress={() => router.push('/admin/loans' as any)}>
+                  <View style={styles.menuItemLeft}>
+                    <View style={[styles.menuIcon, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                      <Wallet size={20} color="#10B981" />
+                    </View>
+                    <View style={styles.menuTextWrap}>
+                      <Text style={styles.menuLabel}>Records</Text>
+                      <Text style={styles.menuSub}>Review platform-wide records, items, and activity</Text>
+                    </View>
+                  </View>
+                  <ChevronRight size={18} color="#94A3B8" />
+                </TouchableOpacity>
               </View>
             </Card>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => router.push('/admin/requests?filter=friend_requests' as any)}
-          >
-            <Card style={[styles.metricCard, styles.metricCardInteractive]}>
-              <View style={styles.metricHeader}>
-                <Users size={16} color="#CA8A04" />
-                <Text style={styles.metricLabel}>Friend requests</Text>
-              </View>
-              <Text style={styles.metricValue}>{stats?.pending_friend_requests || 0}</Text>
-              <Text style={styles.metricMeta}>Still waiting for approval</Text>
-              <View style={styles.metricActionRow}>
-                <Text style={styles.metricActionText}>Open admin records</Text>
-                <ChevronRight size={16} color="#94A3B8" />
-              </View>
-            </Card>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => router.push('/admin/loans' as any)}
-          >
-            <Card style={[styles.metricCard, styles.metricCardInteractive]}>
-              <View style={styles.metricHeader}>
-                <Wallet size={16} color="#10B981" />
-                <Text style={styles.metricLabel}>Total records</Text>
-              </View>
-              <Text style={styles.metricValue}>{stats?.total_loans || 0}</Text>
-              <Text style={styles.metricMeta}>All-time loan/item records</Text>
-              <View style={styles.metricActionRow}>
-                <Text style={styles.metricActionText}>Open admin records</Text>
-                <ChevronRight size={16} color="#94A3B8" />
-              </View>
-            </Card>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.sectionTitle}>Store Metrics</Text>
-        <Card style={styles.externalCard}>
-          <View style={[styles.externalRow, compactWeb && styles.externalRowCompact]}>
-            <ArrowDownToLine size={18} color="#475569" />
-            <View style={styles.externalCopy}>
-              <Text style={styles.externalTitle}>Downloads</Text>
-              <Text style={styles.externalText}>Needs App Store Connect / Play Console or an analytics SDK. Supabase alone cannot infer installs reliably.</Text>
-            </View>
           </View>
-          <View style={[styles.externalRow, compactWeb && styles.externalRowCompact]}>
-            <UserMinus size={18} color="#475569" />
-            <View style={styles.externalCopy}>
-              <Text style={styles.externalTitle}>Uninstalls</Text>
-              <Text style={styles.externalText}>Requires external attribution/analytics. The current app backend does not receive uninstall events.</Text>
-            </View>
+
+          <View style={styles.sideColumn}>
+            <Card style={styles.planCardCompact}>
+              <View style={[styles.planRow, compactWeb && styles.planRowCompact]}>
+                <View>
+                  <Text style={styles.planTitle}>Membership mix</Text>
+                  <Text style={styles.planCaption}>{adoption.premiumShare} conversion from total users</Text>
+                </View>
+                <Text style={styles.planValue}>{stats?.premium_users || 0}</Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: adoption.premiumShare as any }]} />
+              </View>
+              <View style={[styles.planBreakdownRow, compactWeb && styles.planBreakdownRowCompact]}>
+                <Text style={styles.planBreakdownText}>Free: {stats?.free_users || 0}</Text>
+                <Text style={styles.planBreakdownText}>Premium: {stats?.premium_users || 0}</Text>
+              </View>
+            </Card>
+
+            <Card style={styles.externalCardCompact}>
+              <Text style={styles.panelTitle}>Store Metrics</Text>
+              <View style={styles.externalMiniList}>
+                <View style={styles.externalMiniItem}>
+                  <ArrowDownToLine size={16} color="#475569" />
+                  <Text style={styles.externalMiniText}>Downloads need App Store / Play Console analytics.</Text>
+                </View>
+                <View style={styles.externalMiniItem}>
+                  <UserMinus size={16} color="#475569" />
+                  <Text style={styles.externalMiniText}>Uninstalls require external attribution or analytics SDKs.</Text>
+                </View>
+              </View>
+            </Card>
+
+            <Card style={styles.managedPlanCard}>
+              <View style={[styles.managedPlanHeader, compactWeb && styles.managedPlanHeaderCompact]}>
+                <View style={styles.managedPlanCopy}>
+                  <Text style={styles.managedPlanTitle}>Managed Premium</Text>
+                  <Text style={styles.managedPlanText}>Search a user and switch their tier without leaving this page.</Text>
+                </View>
+                <View style={[styles.managedPlanSummary, compactWeb && styles.managedPlanSummaryCompact]}>
+                  <Text style={styles.managedPlanSummaryValue}>{stats?.premium_users || 0}</Text>
+                  <Text style={styles.managedPlanSummaryLabel}>premium</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.managedPlanToggle, compactWeb && styles.managedPlanToggleCompact]}
+                activeOpacity={0.85}
+                onPress={() => setPlanUsersExpanded((current) => !current)}
+              >
+                <View style={styles.managedPlanToggleCopy}>
+                  <Text style={styles.managedPlanToggleTitle}>
+                    {planUsersExpanded ? 'Hide managed users' : 'Show managed users'}
+                  </Text>
+                  <Text style={styles.managedPlanToggleText}>
+                    {planUsersExpanded
+                      ? 'Collapse the list to keep the dashboard compact.'
+                      : `${filteredPlanUsers.length} users ready to review without filling the screen.`}
+                  </Text>
+                </View>
+                {planUsersExpanded ? <ChevronUp size={18} color="#475569" /> : <ChevronDown size={18} color="#475569" />}
+              </TouchableOpacity>
+
+              {planUsersExpanded ? (
+                <>
+                  <View style={styles.planSearchBar}>
+                    <Search size={16} color="#94A3B8" />
+                    <TextInput
+                      value={planSearch}
+                      onChangeText={setPlanSearch}
+                      placeholder="Search by name or email..."
+                      placeholderTextColor="#94A3B8"
+                      style={styles.planSearchInput}
+                    />
+                  </View>
+
+                  <View style={styles.planUsersList}>
+                    {filteredPlanUsers.map((user) => {
+                      const normalizedPlan = normalizePlanTier(user.plan_tier, user.premium_referral_expires_at);
+                      const isSaving = savingUserId === user.id;
+                      const displayName = user.full_name?.trim() || user.email || 'Unknown user';
+
+                      return (
+                        <View key={user.id} style={[styles.planUserRow, compactWeb && styles.planUserRowCompact]}>
+                          <View style={styles.planUserLeft}>
+                            <View style={[styles.planUserAvatar, normalizedPlan === 'premium' ? styles.planUserAvatarPremium : null]}>
+                              <Text style={[styles.planUserAvatarText, normalizedPlan === 'premium' ? styles.planUserAvatarTextPremium : null]}>
+                                {displayName[0]?.toUpperCase() || '?'}
+                              </Text>
+                            </View>
+                            <View style={styles.planUserInfo}>
+                              <Text style={styles.planUserName}>{displayName}</Text>
+                              <Text style={styles.planUserEmail}>{user.email || 'No email'}</Text>
+                            </View>
+                          </View>
+
+                          <View style={[styles.planUserRight, compactWeb && styles.planUserRightCompact]}>
+                            <Text style={[styles.inlinePlanBadge, normalizedPlan === 'premium' ? styles.inlinePlanBadgePremium : styles.inlinePlanBadgeFree]}>
+                              {getPlanLabel(normalizedPlan)}
+                            </Text>
+                            <View style={[styles.inlinePlanActions, compactWeb && styles.inlinePlanActionsCompact]}>
+                              <TouchableOpacity
+                                style={[styles.inlinePlanButton, normalizedPlan === 'free' ? styles.inlinePlanButtonActive : null]}
+                                disabled={isSaving || normalizedPlan === 'free'}
+                                onPress={() => void updatePlanTier(user.id, 'free')}
+                              >
+                                <Text style={[styles.inlinePlanButtonText, normalizedPlan === 'free' ? styles.inlinePlanButtonTextActive : null]}>Free</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.inlinePlanButton, normalizedPlan === 'premium' ? styles.inlinePlanButtonPremiumActive : null]}
+                                disabled={isSaving || normalizedPlan === 'premium'}
+                                onPress={() => void updatePlanTier(user.id, 'premium')}
+                              >
+                                <Text style={[styles.inlinePlanButtonText, normalizedPlan === 'premium' ? styles.inlinePlanButtonTextPremiumActive : null]}>
+                                  {isSaving ? 'Saving...' : 'Premium'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+
+                    {filteredPlanUsers.length === 0 ? (
+                      <View style={styles.planUsersEmpty}>
+                        <Text style={styles.planUsersEmptyText}>No users match that search.</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </>
+              ) : (
+                <View style={styles.managedPlanCollapsed}>
+                  <Text style={styles.managedPlanCollapsedText}>
+                    The membership list stays collapsed by default so the analytics view remains compact.
+                  </Text>
+                </View>
+              )}
+            </Card>
           </View>
-        </Card>
+        </View>
+    </>
+  );
 
-        <Text style={styles.sectionTitle}>Management</Text>
-        <Card style={styles.menuCard}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/admin/users' as any)}>
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: 'rgba(99, 102, 241, 0.1)' }]}>
-                <Users size={20} color="#6366F1" />
-              </View>
-              <View style={styles.menuTextWrap}>
-                <Text style={styles.menuLabel}>Users</Text>
-                <Text style={styles.menuSub}>Advanced user admin: history, password reset, and deletes</Text>
-              </View>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
+  if (isWeb) {
+    return <View style={styles.scroll}>{content}</View>;
+  }
 
-          <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]} onPress={() => router.push('/admin/loans' as any)}>
-            <View style={styles.menuItemLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                <Wallet size={20} color="#10B981" />
-              </View>
-              <View style={styles.menuTextWrap}>
-                <Text style={styles.menuLabel}>Records</Text>
-                <Text style={styles.menuSub}>Review platform-wide loans, items, and balances</Text>
-              </View>
-            </View>
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </Card>
+  return (
+    <Screen style={styles.container} safeAreaEdges={['left', 'right', 'bottom']}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+      >
+        {content}
       </ScrollView>
     </Screen>
   );
@@ -743,11 +825,62 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#475569',
   },
+  headerCard: {
+    padding: 18,
+    borderRadius: 24,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: 'transparent',
+  },
+  headerRowCompact: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  headerCopy: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  headerBadges: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: 'transparent',
+  },
+  headerBadgesCompact: {
+    width: '100%',
+  },
+  headerBadge: {
+    minWidth: 96,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerBadgeLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  headerBadgeValue: {
+    marginTop: 6,
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
   title: {
     fontSize: 28,
     fontWeight: '900',
     color: '#0F172A',
-    marginTop: 12,
   },
   subtitle: {
     fontSize: 14,
@@ -769,16 +902,21 @@ const styles = StyleSheet.create({
   heroGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: 12,
     backgroundColor: 'transparent',
   },
   heroCard: {
-    width: '48%',
-    marginBottom: 12,
+    flexBasis: '23.8%',
+    flexGrow: 1,
     padding: 16,
+    borderRadius: 22,
+  },
+  heroCardCondensed: {
+    flexBasis: '48%',
   },
   heroCardCompact: {
-    width: '100%',
+    flexBasis: '100%',
   },
   heroIcon: {
     width: 42,
@@ -808,6 +946,146 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 12,
     color: '#64748B',
+  },
+  dashboardGrid: {
+    gap: 16,
+    backgroundColor: 'transparent',
+  },
+  dashboardGridWide: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  mainColumn: {
+    flex: 1.35,
+    gap: 16,
+    backgroundColor: 'transparent',
+  },
+  sideColumn: {
+    flex: 0.9,
+    gap: 16,
+    backgroundColor: 'transparent',
+  },
+  panelCard: {
+    padding: 18,
+    gap: 14,
+    borderRadius: 22,
+  },
+  analyticsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+    backgroundColor: 'transparent',
+  },
+  analyticsRowCompact: {
+    flexDirection: 'column',
+  },
+  analyticsPanel: {
+    flex: 1,
+  },
+  panelHeader: {
+    gap: 4,
+    backgroundColor: 'transparent',
+  },
+  panelTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  panelCaption: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 19,
+  },
+  compactMetricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    backgroundColor: 'transparent',
+  },
+  compactMetricsGridCompact: {
+    flexDirection: 'column',
+  },
+  compactMetric: {
+    flexBasis: '31%',
+    flexGrow: 1,
+    minWidth: 120,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  compactMetricCompact: {
+    width: '100%',
+  },
+  compactMetricLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  compactMetricValue: {
+    marginTop: 6,
+    fontSize: 21,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  compactMetricMeta: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  compactInteractiveGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    backgroundColor: 'transparent',
+  },
+  compactInteractiveGridCompact: {
+    flexDirection: 'column',
+  },
+  compactInteractiveCard: {
+    flexBasis: '31%',
+    flexGrow: 1,
+    minWidth: 120,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  compactInteractiveCardCompact: {
+    width: '100%',
+  },
+  compactInteractiveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  compactInteractiveLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  compactInteractiveValue: {
+    marginTop: 8,
+    fontSize: 21,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  compactInteractiveFooter: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  compactInteractiveMeta: {
+    flex: 1,
+    fontSize: 11,
+    color: '#94A3B8',
   },
   sectionTitle: {
     fontSize: 18,
@@ -862,6 +1140,10 @@ const styles = StyleSheet.create({
   },
   planCard: {
     padding: 18,
+  },
+  planCardCompact: {
+    padding: 18,
+    borderRadius: 22,
   },
   planRow: {
     flexDirection: 'row',
@@ -1156,6 +1438,47 @@ const styles = StyleSheet.create({
   externalCard: {
     padding: 16,
     gap: 14,
+  },
+  externalCardCompact: {
+    padding: 18,
+    gap: 12,
+    borderRadius: 22,
+  },
+  externalMiniList: {
+    gap: 10,
+    marginTop: 10,
+    backgroundColor: 'transparent',
+  },
+  externalMiniItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: 'transparent',
+  },
+  externalMiniText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#64748B',
+  },
+  managementGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: 'transparent',
+  },
+  managementGridCompact: {
+    flexDirection: 'column',
+  },
+  managementTile: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
   externalRow: {
     flexDirection: 'row',

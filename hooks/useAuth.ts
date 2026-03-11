@@ -3,6 +3,7 @@ import { usePathname, useRouter, useSegments } from 'expo-router';
 import { clearPersistedAuthState, supabase } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { getDeviceLanguage, normalizeLanguage } from '@/constants/i18n';
 import { normalizePlanTier } from '@/services/subscriptionPlan';
 import { showSharedUpdateNotification } from '@/services/notificationService';
@@ -48,6 +49,7 @@ export const useAuth = () => {
     const profileSyncInFlightRef = useRef(false);
     const profileSyncQueuedRef = useRef(false);
     const rewardHydrationInFlightRef = useRef(false);
+    const getSignedOutRedirectPath = () => (Platform.OS === 'web' ? '/(auth)/login' : '/');
 
     const resetLocalAuthState = async () => {
         await AsyncStorage.removeItem(LAST_PROTECTED_PATH_KEY);
@@ -213,7 +215,7 @@ export const useAuth = () => {
                 }
 
                 if (event === 'SIGNED_OUT') {
-                    router.replace('/');
+                    router.replace(getSignedOutRedirectPath());
                 }
             }
         );
@@ -324,9 +326,10 @@ export const useAuth = () => {
             }
 
             if (!session && !inAuthRoute && !isLandingPage && !isPublicMarketingRoute && !isEphemeralFormRoute) {
-                // User is not signed in and not in the auth group or landing page, redirect to landing page
-                if (pathname !== '/') {
-                    router.replace('/');
+                const signedOutRedirectPath = getSignedOutRedirectPath();
+                // User is not signed in and not in the auth group or public marketing routes.
+                if (pathname !== signedOutRedirectPath) {
+                    router.replace(signedOutRedirectPath);
                 }
             }
         };

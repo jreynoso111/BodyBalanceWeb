@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, usePathname, useRouter, type Href } from 'expo-router';
 import { Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Bell } from 'lucide-react-native';
 
 import { AppLegalFooter } from '@/components/AppLegalFooter';
 import { Text } from '@/components/Themed';
@@ -25,7 +26,7 @@ const BASE_ACCOUNT_NAV: AccountNavItem[] = [
 ];
 const ADMIN_NAV_ITEM: AccountNavItem = {
   href: '/admin' as Href,
-  label: 'Admin',
+  label: 'Admin Analytics',
   matches: ['/admin'],
 };
 
@@ -37,11 +38,13 @@ export function WebAccountLayout({
   eyebrow,
   title,
   description,
+  hideHeader = false,
   children,
 }: {
   eyebrow?: string;
   title: string;
   description: string;
+  hideHeader?: boolean;
   children: React.ReactNode;
 }) {
   const { width } = useWindowDimensions();
@@ -85,14 +88,50 @@ export function WebAccountLayout({
               <Text style={styles.productSubcopy}>The web workspace for the same Supabase account you use in the app.</Text>
             </View>
             <View style={[styles.topbarActions, mobile && styles.topbarActionsMobile]}>
+              <Link href="/notifications" asChild>
+                <Pressable
+                  style={({ hovered, pressed }) =>
+                    StyleSheet.flatten([
+                      styles.iconButton,
+                      styles.interactiveButton,
+                      mobile && styles.topbarActionButtonMobile,
+                      hovered && styles.interactiveButtonHovered,
+                      pressed && styles.interactiveButtonPressed,
+                    ])
+                  }
+                >
+                  <Bell size={18} color="#1E293B" />
+                </Pressable>
+              </Link>
               <Link href="/" asChild>
-                <Pressable style={[styles.siteButton, mobile && styles.topbarActionButtonMobile]}>
+                <Pressable
+                  style={({ hovered, pressed }) =>
+                    StyleSheet.flatten([
+                      styles.siteButton,
+                      styles.interactiveButton,
+                      mobile && styles.topbarActionButtonMobile,
+                      hovered && styles.interactiveButtonHovered,
+                      pressed && styles.interactiveButtonPressed,
+                    ])
+                  }
+                >
                   <Text style={styles.siteButtonText}>Public site</Text>
                 </Pressable>
               </Link>
-              <TouchableOpacity style={[styles.signOutButton, mobile && styles.topbarActionButtonMobile]} onPress={() => void signOut()}>
+              <Pressable
+                style={({ hovered, pressed }) =>
+                  StyleSheet.flatten([
+                    styles.signOutButton,
+                    styles.interactiveButton,
+                    mobile && styles.topbarActionButtonMobile,
+                    hovered && styles.interactiveButtonHovered,
+                    pressed && styles.interactiveButtonPressed,
+                  ])
+                }
+                onPress={() => void signOut()}
+              >
                 <Text style={styles.signOutButtonText}>Sign out</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -117,7 +156,18 @@ export function WebAccountLayout({
                 const active = matchesPath(pathname, item.matches);
                 return (
                   <Link key={item.label} href={item.href} asChild>
-                    <Pressable style={StyleSheet.flatten([styles.navLink, mobile && styles.navLinkMobile, active && styles.navLinkActive])}>
+                    <Pressable
+                      style={({ hovered, pressed }) =>
+                        StyleSheet.flatten([
+                          styles.navLink,
+                          styles.interactiveButton,
+                          mobile && styles.navLinkMobile,
+                          active && styles.navLinkActive,
+                          hovered && styles.navLinkHovered,
+                          pressed && styles.interactiveButtonPressed,
+                        ])
+                      }
+                    >
                       <Text style={[styles.navText, active && styles.navTextActive]}>{item.label}</Text>
                     </Pressable>
                   </Link>
@@ -127,12 +177,13 @@ export function WebAccountLayout({
           </View>
 
           <View style={[styles.content, compact && styles.contentCompact]}>
-            <View style={[styles.headerCard, mobile && styles.headerCardMobile]}>
-              {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-              <Text style={[styles.title, mobile && styles.titleMobile]}>{title}</Text>
-              <Text style={[styles.description, mobile && styles.descriptionMobile]}>{description}</Text>
-            </View>
-
+            {hideHeader ? null : (
+              <View style={[styles.headerCard, mobile && styles.headerCardMobile]}>
+                {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+                <Text style={[styles.title, mobile && styles.titleMobile]}>{title}</Text>
+                <Text style={[styles.description, mobile && styles.descriptionMobile]}>{description}</Text>
+              </View>
+            )}
             <View style={styles.body}>{children}</View>
           </View>
         </View>
@@ -228,6 +279,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D6DAFF',
     backgroundColor: '#FFFFFF',
+  },
+  iconButton: {
+    minHeight: 42,
+    minWidth: 42,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#D6DAFF',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  interactiveButton: {
+    ...(Platform.OS === 'web'
+      ? ({
+          cursor: 'pointer',
+          userSelect: 'none',
+          transitionDuration: '140ms',
+          transitionTimingFunction: 'ease',
+          transitionProperty: 'transform, opacity, background-color, border-color, box-shadow',
+        } as any)
+      : null),
+  },
+  interactiveButtonHovered: {
+    transform: [{ translateY: -1.5 }, { scale: 1.01 }],
+    opacity: 0.98,
+  },
+  interactiveButtonPressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.92,
   },
   siteButtonText: {
     fontSize: 13,
@@ -330,6 +412,11 @@ const styles = StyleSheet.create({
   },
   navLinkMobile: {
     flexBasis: '48%',
+  },
+  navLinkHovered: {
+    backgroundColor: '#F8FAFF',
+    borderColor: '#D6DAFF',
+    borderWidth: 1,
   },
   navLinkActive: {
     backgroundColor: '#EEF2FF',
