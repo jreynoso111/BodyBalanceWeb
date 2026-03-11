@@ -49,7 +49,7 @@ export const useAuth = () => {
     const profileSyncInFlightRef = useRef(false);
     const profileSyncQueuedRef = useRef(false);
     const rewardHydrationInFlightRef = useRef(false);
-    const getSignedOutRedirectPath = () => (Platform.OS === 'web' ? '/(auth)/login' : '/');
+    const getSignedOutRedirectPath = () => '/';
 
     const resetLocalAuthState = async () => {
         await AsyncStorage.removeItem(LAST_PROTECTED_PATH_KEY);
@@ -215,7 +215,7 @@ export const useAuth = () => {
                 }
 
                 if (event === 'SIGNED_OUT') {
-                    router.replace(getSignedOutRedirectPath());
+                    router.replace(getSignedOutRedirectPath() as any);
                 }
             }
         );
@@ -329,7 +329,7 @@ export const useAuth = () => {
                 const signedOutRedirectPath = getSignedOutRedirectPath();
                 // User is not signed in and not in the auth group or public marketing routes.
                 if (pathname !== signedOutRedirectPath) {
-                    router.replace(signedOutRedirectPath);
+                    router.replace(signedOutRedirectPath as any);
                 }
             }
         };

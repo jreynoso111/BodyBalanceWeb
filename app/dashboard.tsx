@@ -362,47 +362,6 @@ export default function AccountDashboardScreen() {
         </Pressable>
       </RNView>
 
-      <RNView style={[styles.splitGrid, compactWeb && styles.stackGrid]}>
-        <Card style={[styles.panelCard, compactWeb && styles.panelCardCompact]}>
-          <Text style={styles.panelTitle}>Balance snapshot</Text>
-          <RNView style={[styles.balanceRow, compactWeb && styles.stackGridTight]}>
-            <Pressable
-              style={({ hovered, pressed }) => [
-                styles.balanceMetric,
-                styles.interactiveSurface,
-                compactWeb && styles.metricCompact,
-                hovered && styles.interactiveSurfaceHovered,
-                pressed && styles.interactiveSurfacePressed,
-              ]}
-              onPress={() => setRecordFilter('lent')}
-            >
-              <RNView style={[styles.balanceIcon, styles.balanceIconGreen]}>
-                <ArrowUpRight size={16} color="#047857" />
-              </RNView>
-              <Text style={styles.balanceLabel}>They owe you</Text>
-              <Text style={styles.balanceValue}>{formatCurrency(stats.lent)}</Text>
-            </Pressable>
-            <Pressable
-              style={({ hovered, pressed }) => [
-                styles.balanceMetric,
-                styles.interactiveSurface,
-                compactWeb && styles.metricCompact,
-                hovered && styles.interactiveSurfaceHovered,
-                pressed && styles.interactiveSurfacePressed,
-              ]}
-              onPress={() => setRecordFilter('borrowed')}
-            >
-              <RNView style={[styles.balanceIcon, styles.balanceIconRed]}>
-                <ArrowDownLeft size={16} color="#B91C1C" />
-              </RNView>
-              <Text style={styles.balanceLabel}>You owe</Text>
-              <Text style={styles.balanceValue}>{formatCurrency(stats.borrowed)}</Text>
-            </Pressable>
-          </RNView>
-        </Card>
-
-      </RNView>
-
       <RNView style={[styles.statsGrid, compactWeb && styles.stackGrid]}>
         <Pressable
           onPress={() => setRecordFilter('open')}
@@ -469,7 +428,49 @@ export default function AccountDashboardScreen() {
             <Text style={styles.statMeta}>Items waiting for your confirmation</Text>
           </Card>
         </Pressable>
+      </RNView>
 
+      <RNView style={[styles.splitGrid, compactWeb && styles.stackGrid]}>
+        <Card style={[styles.panelCard, compactWeb && styles.panelCardCompact]}>
+          <Text style={styles.panelTitle}>Balance snapshot</Text>
+          <RNView style={[styles.balanceRow, compactWeb && styles.stackGridTight]}>
+            <Pressable
+              style={({ hovered, pressed }) => [
+                styles.balanceMetric,
+                styles.interactiveSurface,
+                compactWeb && styles.metricCompact,
+                hovered && styles.interactiveSurfaceHovered,
+                pressed && styles.interactiveSurfacePressed,
+              ]}
+              onPress={() => setRecordFilter('lent')}
+            >
+              <RNView style={[styles.balanceIcon, styles.balanceIconGreen]}>
+                <ArrowUpRight size={16} color="#047857" />
+              </RNView>
+              <Text style={styles.balanceLabel}>They owe you</Text>
+              <Text style={styles.balanceValue}>{formatCurrency(stats.lent)}</Text>
+            </Pressable>
+            <Pressable
+              style={({ hovered, pressed }) => [
+                styles.balanceMetric,
+                styles.interactiveSurface,
+                compactWeb && styles.metricCompact,
+                hovered && styles.interactiveSurfaceHovered,
+                pressed && styles.interactiveSurfacePressed,
+              ]}
+              onPress={() => setRecordFilter('borrowed')}
+            >
+              <RNView style={[styles.balanceIcon, styles.balanceIconRed]}>
+                <ArrowDownLeft size={16} color="#B91C1C" />
+              </RNView>
+              <Text style={styles.balanceLabel}>You owe</Text>
+              <Text style={styles.balanceValue}>{formatCurrency(stats.borrowed)}</Text>
+            </Pressable>
+          </RNView>
+        </Card>
+      </RNView>
+
+      <RNView style={[styles.statsGrid, compactWeb && styles.stackGrid]}>
         <Pressable
           onPress={() => setRecordFilter('dueSoon')}
           style={({ hovered, pressed }) => [
