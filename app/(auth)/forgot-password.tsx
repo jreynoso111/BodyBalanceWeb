@@ -5,16 +5,22 @@ import * as Linking from 'expo-linking';
 import { Mail, ArrowLeft } from 'lucide-react-native';
 
 import { Text, Screen, Card } from '@/components/Themed';
-import { supabase } from '@/services/supabase';
+import { TurnstileWidget } from '@/components/support/TurnstileWidget';
+import { useColorScheme } from '@/components/useColorScheme';
+import { sendPublicPasswordReset } from '@/services/publicAuth';
 import { WebAuthLayout } from '@/components/website/WebAuthLayout';
 
 type FeedbackTone = 'error' | 'success' | 'info';
+const TURNSTILE_SITE_KEY = String(process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAACp99RfEGJMIh-X3').trim();
 
 export default function ForgotPasswordScreen() {
     const router = useRouter();
+    const colorScheme = useColorScheme();
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+    const [turnstileResetNonce, setTurnstileResetNonce] = useState(0);
 
     const showMessage = (title: string, message: string, tone: FeedbackTone) => {
         setFeedback({ tone, text: message });
@@ -30,24 +36,34 @@ export default function ForgotPasswordScreen() {
             return;
         }
 
+        if (Platform.OS === 'web' && !turnstileToken) {
+            showMessage('Error', 'Complete the captcha before requesting a recovery email.', 'error');
+            return;
+        }
+
         try {
             setLoading(true);
             setFeedback(null);
             const redirectTo = Linking.createURL('/reset-password');
-            const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo });
-
-            if (error) {
-                showMessage('Error', 'Could not send the recovery email.', 'error');
-                return;
-            }
+            await sendPublicPasswordReset({
+                email: normalizedEmail,
+                redirectTo,
+                turnstileToken,
+            });
 
             showMessage(
                 'Email sent',
                 'Check your inbox and open the link to reset your password. If you do not see it, review your spam or junk folder too.',
                 'success'
             );
+        } catch (error: any) {
+            showMessage('Error', error?.message || 'Could not send the recovery email.', 'error');
         } finally {
             setLoading(false);
+            if (Platform.OS === 'web') {
+                setTurnstileToken(null);
+                setTurnstileResetNonce((current) => current + 1);
+            }
         }
     };
 
@@ -74,10 +90,23 @@ export default function ForgotPasswordScreen() {
                 </RNView>
             </RNView>
 
+            {Platform.OS === 'web' ? (
+                <RNView style={styles.captchaBlock}>
+                    <Text style={styles.captchaText}>Complete the bot check before we send the recovery link.</Text>
+                    <TurnstileWidget
+                        action="public_forgot_password"
+                        onTokenChange={setTurnstileToken}
+                        resetNonce={turnstileResetNonce}
+                        siteKey={TURNSTILE_SITE_KEY}
+                        theme={colorScheme === 'dark' ? 'dark' : 'light'}
+                    />
+                </RNView>
+            ) : null}
+
             <TouchableOpacity
                 onPress={onSendResetEmail}
-                disabled={loading}
-                style={[styles.primaryButton, loading && { opacity: 0.7 }]}
+                disabled={loading || (Platform.OS === 'web' && !turnstileToken)}
+                style={[styles.primaryButton, (loading || (Platform.OS === 'web' && !turnstileToken)) && { opacity: 0.7 }]}
             >
                 <Text style={styles.buttonText}>{loading ? 'SENDING...' : 'Send link'}</Text>
             </TouchableOpacity>
@@ -233,6 +262,16 @@ const styles = StyleSheet.create({
         padding: 18,
         borderRadius: 16,
         alignItems: 'center',
+    },
+    captchaBlock: {
+        marginBottom: 12,
+        backgroundColor: 'transparent',
+    },
+    captchaText: {
+        marginBottom: 8,
+        fontSize: 12,
+        lineHeight: 18,
+        color: '#64748B',
     },
     buttonText: {
         color: '#fff',

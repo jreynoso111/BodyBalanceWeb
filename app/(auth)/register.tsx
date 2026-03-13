@@ -6,8 +6,11 @@ import { ArrowLeft, Lock, Mail, User } from 'lucide-react-native';
 import { Card, Screen, Text } from '@/components/Themed';
 import { BrandLogo } from '@/components/BrandLogo';
 import { GoogleLogo } from '@/components/GoogleLogo';
+import { TurnstileWidget } from '@/components/support/TurnstileWidget';
+import { useColorScheme } from '@/components/useColorScheme';
 import { waitForAuthSession } from '@/services/authSession';
 import { getPasswordPolicyMessage, isStrongPassword } from '@/services/passwordPolicy';
+import { sendPublicRegistrationCode } from '@/services/publicAuth';
 import { supabase } from '@/services/supabase';
 import { getGoogleOAuthUnavailableReason, isGoogleOAuthEnabledForBuild, signInWithGoogle } from '@/services/oauth';
 import { useAuthStore } from '@/store/authStore';
@@ -15,9 +18,11 @@ import { WebAuthLayout } from '@/components/website/WebAuthLayout';
 
 type FeedbackTone = 'error' | 'success' | 'info';
 type RegisterStep = 'details' | 'verify';
+const TURNSTILE_SITE_KEY = String(process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAACp99RfEGJMIh-X3').trim();
 
 export default function RegisterScreen() {
     const router = useRouter();
+    const colorScheme = useColorScheme();
     const { initialized, user } = useAuthStore();
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
@@ -29,6 +34,8 @@ export default function RegisterScreen() {
     const [verifyingCode, setVerifyingCode] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [feedback, setFeedback] = useState<{ tone: FeedbackTone; text: string } | null>(null);
+    const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+    const [turnstileResetNonce, setTurnstileResetNonce] = useState(0);
     const googleEnabledForBuild = isGoogleOAuthEnabledForBuild();
     const googleUnavailableReason = getGoogleOAuthUnavailableReason();
     const nextRoute = Platform.OS === 'web' ? '/dashboard' : '/(tabs)';
@@ -78,6 +85,13 @@ export default function RegisterScreen() {
 
     const normalizedEmail = normalizeEmail(email);
     const busy = loading || verifyingCode || googleLoading;
+    const canSendOrResendCode = Platform.OS !== 'web' || Boolean(turnstileToken);
+
+    const resetTurnstile = () => {
+        if (Platform.OS !== 'web') return;
+        setTurnstileToken(null);
+        setTurnstileResetNonce((current) => current + 1);
+    };
 
     const validateAccountFields = () => {
         if (!fullName.trim()) {
@@ -111,26 +125,22 @@ export default function RegisterScreen() {
             return;
         }
 
+        if (Platform.OS === 'web' && !turnstileToken) {
+            showMessage('Error', 'Complete the captcha before requesting a verification code.', 'error');
+            return;
+        }
+
         try {
             setFeedback(null);
             setLoading(true);
 
-            const { error } = await withTimeout(
-                supabase.auth.signInWithOtp({
+            await withTimeout(
+                sendPublicRegistrationCode({
                     email: normalizedEmail,
-                    options: {
-                        shouldCreateUser: true,
-                        data: {
-                            full_name: fullName.trim(),
-                        },
-                    },
+                    fullName: fullName.trim(),
+                    turnstileToken,
                 })
             );
-
-            if (error) {
-                showMessage('Verification failed', mapAuthError(error.message), 'error');
-                return;
-            }
 
             setStep('verify');
             showMessage(
@@ -142,6 +152,7 @@ export default function RegisterScreen() {
             showMessage('Verification failed', error?.message || 'Could not send a verification code right now.', 'error');
         } finally {
             setLoading(false);
+            resetTurnstile();
         }
     };
 
@@ -338,10 +349,23 @@ export default function RegisterScreen() {
                         </RNView>
                     </RNView>
 
+                    {Platform.OS === 'web' ? (
+                        <RNView style={styles.captchaBlock}>
+                            <Text style={styles.captchaText}>Complete the bot check before Buddy Balance emails your verification code.</Text>
+                            <TurnstileWidget
+                                action="public_register"
+                                onTokenChange={setTurnstileToken}
+                                resetNonce={turnstileResetNonce}
+                                siteKey={TURNSTILE_SITE_KEY}
+                                theme={colorScheme === 'dark' ? 'dark' : 'light'}
+                            />
+                        </RNView>
+                    ) : null}
+
                     <TouchableOpacity
                         onPress={sendVerificationCode}
-                        disabled={busy}
-                        style={[styles.primaryButton, busy && { opacity: 0.75 }]}
+                        disabled={busy || !canSendOrResendCode}
+                        style={[styles.primaryButton, (busy || !canSendOrResendCode) && { opacity: 0.75 }]}
                     >
                         <Text style={styles.buttonText}>{loading ? 'SENDING CODE...' : 'Send Verification Code'}</Text>
                     </TouchableOpacity>
@@ -373,10 +397,23 @@ export default function RegisterScreen() {
                         <Text style={styles.buttonText}>{verifyingCode ? 'VERIFYING...' : 'Verify Code & Create Account'}</Text>
                     </TouchableOpacity>
 
+                    {Platform.OS === 'web' ? (
+                        <RNView style={styles.captchaBlock}>
+                            <Text style={styles.captchaText}>Need a new code? Complete the bot check before resending.</Text>
+                            <TurnstileWidget
+                                action="public_register"
+                                onTokenChange={setTurnstileToken}
+                                resetNonce={turnstileResetNonce}
+                                siteKey={TURNSTILE_SITE_KEY}
+                                theme={colorScheme === 'dark' ? 'dark' : 'light'}
+                            />
+                        </RNView>
+                    ) : null}
+
                     <TouchableOpacity
                         onPress={sendVerificationCode}
-                        disabled={busy}
-                        style={styles.secondaryButton}
+                        disabled={busy || !canSendOrResendCode}
+                        style={[styles.secondaryButton, (!canSendOrResendCode || busy) && styles.secondaryButtonDisabled]}
                     >
                         <Text style={styles.secondaryButtonText}>{loading ? 'SENDING...' : 'Resend code'}</Text>
                     </TouchableOpacity>
@@ -593,6 +630,20 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         alignItems: 'center',
         marginTop: 8,
+    },
+    secondaryButtonDisabled: {
+        opacity: 0.6,
+    },
+    captchaBlock: {
+        marginTop: 12,
+        marginBottom: 4,
+        backgroundColor: 'transparent',
+    },
+    captchaText: {
+        marginBottom: 8,
+        fontSize: 12,
+        lineHeight: 18,
+        color: '#64748B',
     },
     googleButton: {
         marginTop: 8,

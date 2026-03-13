@@ -2,9 +2,14 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { Text } from '@/components/Themed';
+import { useColorScheme } from '@/components/useColorScheme';
 import { supabase } from '@/services/supabase';
+import { TurnstileWidget } from '@/components/support/TurnstileWidget';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const TURNSTILE_SITE_KEY = String(
+  process.env.EXPO_PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAACp99RfEGJMIh-X3',
+).trim();
 
 type FormState = {
   name: string;
@@ -25,10 +30,13 @@ const INITIAL_FORM: FormState = {
 };
 
 export function PublicContactForm() {
+  const colorScheme = useColorScheme();
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileResetNonce, setTurnstileResetNonce] = useState(0);
 
   const updateField = (field: keyof FormState, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -64,6 +72,16 @@ export function PublicContactForm() {
       return;
     }
 
+    if (Platform.OS === 'web' && !TURNSTILE_SITE_KEY) {
+      setError('Contact form security is not configured right now.');
+      return;
+    }
+
+    if (Platform.OS === 'web' && !turnstileToken) {
+      setError('Complete the captcha before sending your message.');
+      return;
+    }
+
     setLoading(true);
     const { error: invokeError } = await supabase.functions.invoke('public-contact', {
       body: {
@@ -71,11 +89,14 @@ export function PublicContactForm() {
         email,
         subject,
         message,
+        turnstileToken,
         website: form.website,
         source: Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : 'app',
       },
     });
     setLoading(false);
+    setTurnstileToken(null);
+    setTurnstileResetNonce((current) => current + 1);
 
     if (invokeError) {
       setError(invokeError.message || 'Could not send your message right now.');
@@ -149,10 +170,24 @@ export function PublicContactForm() {
         autoCapitalize="none"
       />
 
+      {Platform.OS === 'web' ? (
+        <TurnstileWidget
+          action="public_contact"
+          onTokenChange={setTurnstileToken}
+          resetNonce={turnstileResetNonce}
+          siteKey={TURNSTILE_SITE_KEY}
+          theme={colorScheme === 'dark' ? 'dark' : 'light'}
+        />
+      ) : null}
+
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       {success ? <Text style={styles.successText}>{success}</Text> : null}
 
-      <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} disabled={loading} onPress={() => void submit()}>
+      <TouchableOpacity
+        style={[styles.button, (loading || (Platform.OS === 'web' && !turnstileToken)) && styles.buttonDisabled]}
+        disabled={loading || (Platform.OS === 'web' && !turnstileToken)}
+        onPress={() => void submit()}
+      >
         {loading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.buttonText}>Send message</Text>}
       </TouchableOpacity>
     </View>
