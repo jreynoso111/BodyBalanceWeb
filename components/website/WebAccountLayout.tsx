@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, usePathname, useRouter, type Href } from 'expo-router';
+import { Link, Redirect, usePathname, useRouter, type Href } from 'expo-router';
 import { Platform, Pressable, ScrollView, StyleSheet, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Bell } from 'lucide-react-native';
 
@@ -53,7 +53,7 @@ export function WebAccountLayout({
   const pathname = usePathname() || '/dashboard';
   const router = useRouter();
   const colorScheme = useColorScheme();
-  const { user, role, planTier } = useAuthStore();
+  const { user, role, planTier, initialized } = useAuthStore();
   const displayName =
     String(user?.user_metadata?.full_name || '').trim() ||
     String(user?.email || '').split('@')[0] ||
@@ -75,6 +75,25 @@ export function WebAccountLayout({
     }
     router.replace('/');
   };
+
+  if (Platform.OS === 'web' && !initialized) {
+    return (
+      <View style={[styles.loadingPage, isDark && styles.pageDark]}>
+        <View style={styles.shellFrame}>
+          <View style={[styles.loadingCard, isDark && styles.loadingCardDark]}>
+            <Text style={[styles.loadingTitle, isDark && styles.loadingTitleDark]}>Loading your dashboard...</Text>
+            <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>
+              Restoring your account session and workspace.
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (Platform.OS === 'web' && initialized && !user) {
+    return <Redirect href="/(auth)/login" />;
+  }
 
   return (
     <ScrollView
@@ -147,21 +166,23 @@ export function WebAccountLayout({
         </View>
       </View>
 
-      <View style={styles.shellFrame}>
-        <View style={[styles.main, compact && styles.mainCompact]}>
-          <View style={[styles.sidebar, !compact && styles.sidebarSticky, compact && styles.sidebarCompact]}>
-            <View style={[styles.profileCard, mobile && styles.profileCardMobile, isDark && styles.profileCardDark]}>
-              <View style={[styles.avatar, isDark && styles.avatarDark]}>
+      <View style={[styles.subbarSticky, compact && styles.subbarStatic, isDark && styles.subbarStickyDark]}>
+        <View style={styles.shellFrame}>
+          <View style={[styles.subbar, mobile && styles.subbarMobile, isDark && styles.subbarDark]}>
+            <View style={[styles.subbarIdentity, mobile && styles.subbarIdentityMobile]}>
+              <View style={[styles.avatar, styles.subbarAvatar, isDark && styles.avatarDark]}>
                 <Text style={[styles.avatarText, isDark && styles.avatarTextDark]}>{displayName.charAt(0).toUpperCase()}</Text>
               </View>
-              <Text style={[styles.profileName, isDark && styles.profileNameDark]}>{displayName}</Text>
-              <Text style={[styles.profileEmail, isDark && styles.profileEmailDark]}>{user?.email}</Text>
-              <Text style={[styles.profileMeta, isDark && styles.profileMetaDark]}>
-                {getPlanLabel(planTier)} plan{hasAdminAccess ? ' • Admin' : ''}
-              </Text>
+              <View style={styles.subbarIdentityCopy}>
+                <Text style={[styles.subbarName, isDark && styles.subbarNameDark]}>{displayName}</Text>
+                <Text style={[styles.subbarEmail, isDark && styles.subbarEmailDark]}>{user?.email}</Text>
+                <Text style={[styles.subbarMeta, isDark && styles.subbarMetaDark]}>
+                  {getPlanLabel(planTier)} plan{hasAdminAccess ? ' • Admin' : ''}
+                </Text>
+              </View>
             </View>
 
-            <View style={[styles.navCard, mobile && styles.navCardMobile, isDark && styles.navCardDark]}>
+            <View style={[styles.subbarNav, mobile && styles.subbarNavMobile]}>
               {accountNav.map((item) => {
                 const active = matchesPath(pathname, item.matches);
                 return (
@@ -169,23 +190,22 @@ export function WebAccountLayout({
                     <Pressable
                       style={({ hovered, pressed }) =>
                         StyleSheet.flatten([
-                          styles.navLink,
+                          styles.subbarNavLink,
                           styles.interactiveButton,
-                          mobile && styles.navLinkMobile,
-                          isDark && styles.navLinkDark,
-                          active && styles.navLinkActive,
-                          active && isDark && styles.navLinkActiveDark,
-                          hovered && (isDark ? styles.navLinkHoveredDark : styles.navLinkHovered),
+                          isDark && styles.subbarNavLinkDark,
+                          active && styles.subbarNavLinkActive,
+                          active && isDark && styles.subbarNavLinkActiveDark,
+                          hovered && (isDark ? styles.subbarNavLinkHoveredDark : styles.subbarNavLinkHovered),
                           pressed && styles.interactiveButtonPressed,
                         ])
                       }
                     >
                       <Text
                         style={[
-                          styles.navText,
-                          isDark && styles.navTextDark,
-                          active && styles.navTextActive,
-                          active && isDark && styles.navTextActiveDark,
+                          styles.subbarNavText,
+                          isDark && styles.subbarNavTextDark,
+                          active && styles.subbarNavTextActive,
+                          active && isDark && styles.subbarNavTextActiveDark,
                         ]}
                       >
                         {item.label}
@@ -196,19 +216,21 @@ export function WebAccountLayout({
               })}
             </View>
           </View>
+        </View>
+      </View>
 
-          <View style={[styles.content, compact && styles.contentCompact]}>
-            {hideHeader ? null : (
-              <View style={[styles.headerCard, mobile && styles.headerCardMobile, isDark && styles.headerCardDark]}>
-                {eyebrow ? <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>{eyebrow}</Text> : null}
-                <Text style={[styles.title, mobile && styles.titleMobile, isDark && styles.titleDark]}>{title}</Text>
-                <Text style={[styles.description, mobile && styles.descriptionMobile, isDark && styles.descriptionDark]}>
-                  {description}
-                </Text>
-              </View>
-            )}
-            <View style={styles.body}>{children}</View>
-          </View>
+      <View style={styles.shellFrame}>
+        <View style={styles.contentFull}>
+          {hideHeader ? null : (
+            <View style={[styles.headerCard, mobile && styles.headerCardMobile, isDark && styles.headerCardDark]}>
+              {eyebrow ? <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>{eyebrow}</Text> : null}
+              <Text style={[styles.title, mobile && styles.titleMobile, isDark && styles.titleDark]}>{title}</Text>
+              <Text style={[styles.description, mobile && styles.descriptionMobile, isDark && styles.descriptionDark]}>
+                {description}
+              </Text>
+            </View>
+          )}
+          <View style={styles.body}>{children}</View>
         </View>
 
         <AppLegalFooter style={styles.footer} />
@@ -218,6 +240,41 @@ export function WebAccountLayout({
 }
 
 const styles = StyleSheet.create({
+  loadingPage: {
+    flex: 1,
+    backgroundColor: '#F6F8FF',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  loadingCard: {
+    marginTop: 24,
+    borderRadius: 24,
+    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  loadingCardDark: {
+    backgroundColor: '#0F172A',
+    borderColor: '#334155',
+  },
+  loadingTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  loadingTitleDark: {
+    color: '#F8FAFC',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 15,
+    lineHeight: 24,
+    color: '#475569',
+  },
+  loadingTextDark: {
+    color: '#CBD5E1',
+  },
   page: {
     flex: 1,
     backgroundColor: '#F6F8FF',
@@ -254,6 +311,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(2,6,23,0.92)',
   },
   topbarStatic: {
+    position: 'relative',
+    top: 'auto',
+  },
+  subbarSticky: {
+    zIndex: 18,
+    backgroundColor: 'rgba(246,248,255,0.9)',
+    paddingBottom: 10,
+    ...(Platform.OS === 'web'
+      ? {
+          position: 'sticky' as const,
+          top: 104,
+        }
+      : null),
+  },
+  subbarStickyDark: {
+    backgroundColor: 'rgba(2,6,23,0.88)',
+  },
+  subbarStatic: {
     position: 'relative',
     top: 'auto',
   },
@@ -381,6 +456,135 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  subbar: {
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  subbarMobile: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderRadius: 18,
+  },
+  subbarDark: {
+    backgroundColor: 'rgba(15,23,42,0.9)',
+    borderColor: '#334155',
+  },
+  subbarIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    minWidth: 280,
+    flexShrink: 1,
+  },
+  subbarIdentityMobile: {
+    width: '100%',
+  },
+  subbarAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  subbarIdentityCopy: {
+    gap: 2,
+    flexShrink: 1,
+  },
+  subbarName: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  subbarNameDark: {
+    color: '#F8FAFC',
+  },
+  subbarEmail: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#475569',
+  },
+  subbarEmailDark: {
+    color: '#CBD5E1',
+  },
+  subbarMeta: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: '#6366F1',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  subbarMetaDark: {
+    color: '#CBD5E1',
+  },
+  subbarNav: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  subbarNavMobile: {
+    width: '100%',
+    justifyContent: 'flex-start',
+    flex: 0,
+  },
+  subbarNavLink: {
+    minHeight: 42,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDE5FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subbarNavLinkDark: {
+    backgroundColor: '#0F172A',
+    borderColor: '#334155',
+  },
+  subbarNavLinkHovered: {
+    backgroundColor: '#F8FAFF',
+    borderColor: '#C7D2FE',
+    transform: [{ translateY: -1 }],
+  },
+  subbarNavLinkHoveredDark: {
+    backgroundColor: '#111827',
+    borderColor: '#475569',
+    transform: [{ translateY: -1 }],
+  },
+  subbarNavLinkActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#C7D2FE',
+  },
+  subbarNavLinkActiveDark: {
+    backgroundColor: '#334155',
+    borderColor: '#475569',
+  },
+  subbarNavText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  subbarNavTextDark: {
+    color: '#CBD5E1',
+  },
+  subbarNavTextActive: {
+    color: '#4338CA',
+  },
+  subbarNavTextActiveDark: {
+    color: '#F8FAFC',
   },
   main: {
     flexDirection: 'row',
@@ -541,6 +745,10 @@ const styles = StyleSheet.create({
     width: '100%',
     minWidth: 0,
     flex: 0,
+  },
+  contentFull: {
+    width: '100%',
+    gap: 16,
   },
   headerCard: {
     borderRadius: 32,

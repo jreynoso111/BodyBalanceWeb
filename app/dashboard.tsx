@@ -133,6 +133,12 @@ export default function AccountDashboardScreen() {
   const [loading, setLoading] = React.useState(true);
   const compactWeb = Platform.OS === 'web' && width < 820;
   const isDark = colorScheme === 'dark';
+  const quickLinks = [
+    { label: 'Contacts', href: '/contacts' },
+    { label: 'Profile', href: '/profile' },
+    { label: 'Membership', href: '/subscription' },
+    { label: 'Notifications', href: '/notifications' },
+  ] as const;
 
   const loadDashboard = React.useCallback(
     async () => {
@@ -377,6 +383,25 @@ export default function AccountDashboardScreen() {
           </RNView>
           <Text style={[styles.dashboardActionSecondaryText, isDark && styles.dashboardActionSecondaryTextDark]}>Add friend</Text>
         </Pressable>
+
+        {quickLinks.map((item) => (
+          <Pressable
+            key={item.href}
+            style={({ hovered, pressed }) => [
+              styles.dashboardQuickButton,
+              isDark && styles.dashboardQuickButtonDark,
+              styles.interactiveSurface,
+              compactWeb && styles.dashboardActionButtonCompact,
+              hovered && styles.interactiveSurfaceHovered,
+              pressed && styles.interactiveSurfacePressed,
+            ]}
+            onPress={() => router.push(item.href)}
+          >
+            <Text style={[styles.dashboardQuickButtonText, isDark && styles.dashboardQuickButtonTextDark]}>
+              {item.label}
+            </Text>
+          </Pressable>
+        ))}
       </RNView>
 
       <RNView style={[styles.statsGrid, compactWeb && styles.stackGrid]}>
@@ -874,6 +899,29 @@ const styles = StyleSheet.create({
     color: '#4338CA',
   },
   dashboardActionSecondaryTextDark: {
+    color: '#E2E8F0',
+  },
+  dashboardQuickButton: {
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D9E1FF',
+    backgroundColor: '#F8FAFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dashboardQuickButtonDark: {
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+  },
+  dashboardQuickButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  dashboardQuickButtonTextDark: {
     color: '#E2E8F0',
   },
   panelCard: {
