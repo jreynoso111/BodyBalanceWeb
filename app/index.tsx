@@ -17,12 +17,16 @@ import { AppShowcase, InsideAppGallery } from '@/components/website/AppShowcase'
 import { useColorScheme } from '@/components/useColorScheme';
 import { PREMIUM_BENEFITS } from '@/constants/Premium';
 import { PLAN_LIMITS } from '@/services/subscriptionPlan';
+import { useAuthStore } from '@/store/authStore';
 
 export default function LandingPage() {
     const router = useRouter();
     const colorScheme = useColorScheme();
     const [activeAppSlide, setActiveAppSlide] = useState(0);
     const isDark = colorScheme === 'dark';
+    const user = useAuthStore((state) => state.user);
+    const initialized = useAuthStore((state) => state.initialized);
+    const primaryCtaHref = initialized && user ? '/dashboard' : '/(auth)/login';
     const freeLinkedFriendsLimit = PLAN_LIMITS.free.linkedFriends.toString();
     const freeActiveRecordsLimit = PLAN_LIMITS.free.activeRecords.toString();
     const darkSlideAccents = ['#CBD5E1', '#94A3B8', '#64748B', '#475569'] as const;
@@ -60,11 +64,7 @@ export default function LandingPage() {
                 eyebrow="Buddy Balance . Mobile Ledger . 2026"
                 title="A simple way to keep shared records and reminders with friends."
                 description="Buddy Balance helps friends keep track of shared activity, returns, reminders, and account history in one place. It does not send money, connect bank accounts, or move funds."
-                primaryAction={{ href: 'https://apps.apple.com/' as Href, label: 'Download BuddyBalance' }}
-                secondaryActions={[
-                    { href: 'https://apps.apple.com/' as Href, label: 'App Store', variant: 'secondary', icon: 'app-store' },
-                    { href: 'https://play.google.com/store' as Href, label: 'Google Play', variant: 'secondary', icon: 'google-play' },
-                ]}
+                primaryAction={{ href: primaryCtaHref as Href, label: 'Get Started' }}
                 heroVisual={<AppShowcase />}
             >
                 <View style={[styles.webRibbon, isDark && styles.webRibbonDark]}>

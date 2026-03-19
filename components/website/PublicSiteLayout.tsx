@@ -54,6 +54,11 @@ const SIGNALS = [
   'Shared history insights',
 ];
 
+const STORE_LINKS: PublicAction[] = [
+  { href: 'https://apps.apple.com/' as Href, label: 'App Store', variant: 'secondary', icon: 'app-store' },
+  { href: 'https://play.google.com/store' as Href, label: 'Google Play', variant: 'secondary', icon: 'google-play' },
+] as const;
+
 function isActivePath(currentPath: string, matches: string[]) {
   return matches.some((href) => {
     if (href === '/') return currentPath === '/';
@@ -327,13 +332,32 @@ export function PublicSiteLayout({
             style={[styles.footerShell, mobile && styles.footerShellMobile]}
           >
             <View style={[styles.footerRow, mobile && styles.footerRowMobile]}>
-              <View style={styles.footerStamp}>
-                <Text style={styles.footerStampText}>MOBILE FIRST</Text>
+              <View style={styles.footerCopyBlock}>
+                <View style={styles.footerStamp}>
+                  <Text style={styles.footerStampText}>MOBILE FIRST</Text>
+                </View>
+                <Text style={styles.footerNote}>
+                  Buddy Balance is rolling toward public release. This site hosts support, policies, and product context
+                  while the mobile app gets finalized.
+                </Text>
               </View>
-              <Text style={styles.footerNote}>
-                Buddy Balance is rolling toward public release. This site hosts support, policies, and product context
-                while the mobile app gets finalized.
-              </Text>
+              <View style={[styles.footerStoreActions, mobile && styles.footerStoreActionsMobile]}>
+                {STORE_LINKS.map((action) => (
+                  <Link key={`${action.href}:${action.label}`} href={action.href} asChild>
+                    <Pressable
+                      style={StyleSheet.flatten([
+                        styles.actionButton,
+                        styles.footerActionButton,
+                        mobile && styles.footerActionButtonMobile,
+                        styles.actionSecondary,
+                        styles.actionSecondaryDark,
+                      ])}
+                    >
+                      <ActionContent action={action} isDark primary={false} />
+                    </Pressable>
+                  </Link>
+                ))}
+              </View>
             </View>
             <AppLegalFooter style={styles.footerText} />
           </LinearGradient>
@@ -859,8 +883,7 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 14,
   },
@@ -868,11 +891,17 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-start',
   },
+  footerCopyBlock: {
+    flex: 1,
+    minWidth: 240,
+    gap: 12,
+  },
   footerStamp: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.08)',
+    alignSelf: 'flex-start',
   },
   footerStampText: {
     color: '#CBD5E1',
@@ -881,11 +910,34 @@ const styles = StyleSheet.create({
     letterSpacing: 1.8,
   },
   footerNote: {
-    flex: 1,
-    minWidth: 220,
     color: '#CBD5E1',
     fontSize: 14,
     lineHeight: 22,
+    maxWidth: 620,
+  },
+  footerStoreActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 10,
+    marginLeft: 'auto',
+    alignSelf: 'center',
+  },
+  footerStoreActionsMobile: {
+    width: '100%',
+    justifyContent: 'flex-start',
+    marginLeft: 0,
+    alignSelf: 'stretch',
+  },
+  footerActionButton: {
+    minHeight: 46,
+    paddingHorizontal: 16,
+    borderColor: 'rgba(148,163,184,0.3)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  footerActionButtonMobile: {
+    flexGrow: 1,
   },
   footerText: {
     color: '#F8FAFC',
