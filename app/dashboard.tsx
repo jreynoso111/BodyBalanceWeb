@@ -541,13 +541,14 @@ export default function AccountDashboardScreen() {
       </RNView>
 
       <RNView style={styles.recordPanelsStack}>
-        <Card
-          style={[
-            styles.panelCard,
-            styles.stackedPanelCard,
-            compactWeb && styles.panelCardCompact,
-          ]}
-        >
+        <RNView style={styles.recordPanelBlock}>
+          <Card
+            style={[
+              styles.panelCard,
+              styles.stackedPanelCard,
+              compactWeb && styles.panelCardCompact,
+            ]}
+          >
           <RNView style={[styles.recentHeader, narrowPanels && styles.recentHeaderCompact]}>
             <RNView>
               <Text style={[styles.panelTitle, isDark && styles.panelTitleDark]}>Open records</Text>
@@ -631,15 +632,17 @@ export default function AccountDashboardScreen() {
               </Pressable>
             ))
           )}
-        </Card>
+          </Card>
+        </RNView>
 
-        <Card
-          style={[
-            styles.panelCard,
-            styles.stackedPanelCard,
-            compactWeb && styles.panelCardCompact,
-          ]}
-        >
+        <RNView style={styles.recordPanelBlockLast}>
+          <Card
+            style={[
+              styles.panelCard,
+              styles.stackedPanelCard,
+              compactWeb && styles.panelCardCompact,
+            ]}
+          >
           <RNView style={[styles.recentHeader, narrowPanels && styles.recentHeaderCompact]}>
             <Text style={[styles.panelTitle, isDark && styles.panelTitleDark]}>Recent records</Text>
             <Pressable
@@ -708,7 +711,8 @@ export default function AccountDashboardScreen() {
               )}
             </>
           )}
-        </Card>
+          </Card>
+        </RNView>
       </RNView>
     </WebAccountLayout>
   );
@@ -967,8 +971,18 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
   },
   recordPanelsStack: {
-    gap: 20,
     position: 'relative',
+  },
+  recordPanelBlock: {
+    width: '100%',
+    marginBottom: 20,
+    position: 'relative',
+    zIndex: 0,
+  },
+  recordPanelBlockLast: {
+    width: '100%',
+    position: 'relative',
+    zIndex: 0,
   },
   panelCard: {
     flex: 1,
@@ -985,6 +999,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     position: 'relative',
     zIndex: 0,
+    overflow: 'hidden',
   },
   panelTitle: {
     fontSize: 20,
