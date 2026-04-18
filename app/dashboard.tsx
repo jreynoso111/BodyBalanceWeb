@@ -541,175 +541,179 @@ export default function AccountDashboardScreen() {
       </RNView>
 
       <RNView style={styles.recordPanelsStack}>
-        <Card
-          style={[
-            styles.panelCard,
-            styles.stackedPanelCard,
-            styles.recentPanelCard,
-            compactWeb && styles.panelCardCompact,
-          ]}
-        >
-          <RNView style={[styles.recentHeader, narrowPanels && styles.recentHeaderCompact]}>
-            <RNView>
-              <Text style={[styles.panelTitle, isDark && styles.panelTitleDark]}>Open records</Text>
-              <Text style={[styles.panelBody, isDark && styles.panelBodyDark]}>
-                {getFilterLabel(recordFilter)}: {filteredRecords.length}
-              </Text>
+        <RNView style={styles.recordPanelSection}>
+          <Card
+            style={[
+              styles.panelCard,
+              styles.stackedPanelCard,
+              styles.recentPanelCard,
+              compactWeb && styles.panelCardCompact,
+            ]}
+          >
+            <RNView style={[styles.recentHeader, narrowPanels && styles.recentHeaderCompact]}>
+              <RNView>
+                <Text style={[styles.panelTitle, isDark && styles.panelTitleDark]}>Open records</Text>
+                <Text style={[styles.panelBody, isDark && styles.panelBodyDark]}>
+                  {getFilterLabel(recordFilter)}: {filteredRecords.length}
+                </Text>
+              </RNView>
+              <RNView style={[styles.panelActions, compactWeb && styles.panelActionsCompact]}>
+                <Pressable
+                  onPress={() => setRecordFilter('open')}
+                  style={({ hovered, pressed }) => [
+                    styles.inlineActionButton,
+                    hovered && (isDark ? styles.inlineActionButtonHoveredDark : styles.inlineActionButtonHovered),
+                    pressed && styles.inlineActionButtonPressed,
+                  ]}
+                >
+                  <Text style={[styles.refreshText, isDark && styles.refreshTextDark]}>Show all</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setOpenExpanded((current) => !current)}
+                  style={({ hovered, pressed }) => [
+                    styles.sectionActionButton,
+                    isDark && styles.sectionActionButtonDark,
+                    hovered && (isDark ? styles.sectionActionButtonHoveredDark : styles.sectionActionButtonHovered),
+                    pressed && styles.inlineActionButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.sectionActionButtonText}>{openExpanded ? 'Collapse' : 'Expand'}</Text>
+                </Pressable>
+              </RNView>
             </RNView>
-            <RNView style={[styles.panelActions, compactWeb && styles.panelActionsCompact]}>
+
+            {loading ? (
+              <RNView style={styles.loadingState}>
+                <ActivityIndicator size="small" color={isDark ? '#E2E8F0' : '#4F46E5'} />
+                <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>Loading records...</Text>
+              </RNView>
+            ) : !openExpanded ? (
+              <RNView style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+                <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>Open records are minimized.</Text>
+                <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+                  Expand this section when you want to review the records that are still active in this view.
+                </Text>
+              </RNView>
+            ) : filteredRecords.length === 0 ? (
+              <RNView style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+                <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>No records match this view.</Text>
+                <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+                  Choose another metric or create a new record to populate this section.
+                </Text>
+              </RNView>
+            ) : (
+              filteredRecords.map((record) => (
+                <Pressable
+                  key={record.id}
+                  style={({ hovered, pressed }) => [
+                    styles.recordRow,
+                    isDark && styles.recordRowDark,
+                    styles.interactiveSurface,
+                    compactWeb && styles.recordRowCompact,
+                    hovered && styles.interactiveSurfaceHovered,
+                    pressed && styles.interactiveSurfacePressed,
+                  ]}
+                  onPress={() => router.push(`/loan/${record.id}`)}
+                >
+                  <RNView style={styles.recordCopy}>
+                    <Text style={[styles.recordName, isDark && styles.recordNameDark]}>{record.contacts?.name || 'Unknown contact'}</Text>
+                    <Text style={[styles.recordMeta, isDark && styles.recordMetaDark]}>
+                      {record.category === 'item'
+                        ? 'Item record'
+                        : record.type === 'lent'
+                          ? 'Lent record'
+                          : 'Borrowed record'}
+                    </Text>
+                    <Text style={[styles.recordSubmeta, isDark && styles.recordSubmetaDark]}>{getDueLabel(record.due_date)}</Text>
+                  </RNView>
+                  <RNView style={[styles.recordValueBlock, compactWeb && styles.recordValueBlockCompact]}>
+                    <Text style={[styles.recordValue, isDark && styles.recordValueDark]}>{getRecordValue(record)}</Text>
+                    <Text style={[styles.recordStatus, isDark && styles.recordStatusDark]}>{record.status}</Text>
+                  </RNView>
+                </Pressable>
+              ))
+            )}
+          </Card>
+        </RNView>
+
+        <RNView style={styles.recordPanelSection}>
+          <Card
+            style={[
+              styles.panelCard,
+              styles.stackedPanelCard,
+              compactWeb && styles.panelCardCompact,
+            ]}
+          >
+            <RNView style={[styles.recentHeader, narrowPanels && styles.recentHeaderCompact]}>
+              <Text style={[styles.panelTitle, isDark && styles.panelTitleDark]}>Recent records</Text>
               <Pressable
-                onPress={() => setRecordFilter('open')}
-                style={({ hovered, pressed }) => [
-                  styles.inlineActionButton,
-                  hovered && (isDark ? styles.inlineActionButtonHoveredDark : styles.inlineActionButtonHovered),
-                  pressed && styles.inlineActionButtonPressed,
-                ]}
-              >
-                <Text style={[styles.refreshText, isDark && styles.refreshTextDark]}>Show all</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setOpenExpanded((current) => !current)}
+                onPress={() => setRecentExpanded((current) => !current)}
                 style={({ hovered, pressed }) => [
                   styles.sectionActionButton,
+                  styles.interactiveButtonInline,
                   isDark && styles.sectionActionButtonDark,
                   hovered && (isDark ? styles.sectionActionButtonHoveredDark : styles.sectionActionButtonHovered),
                   pressed && styles.inlineActionButtonPressed,
                 ]}
               >
-                <Text style={styles.sectionActionButtonText}>{openExpanded ? 'Collapse' : 'Expand'}</Text>
+                <Text style={styles.sectionActionButtonText}>{recentExpanded ? 'Collapse' : 'Expand'}</Text>
+                {recentExpanded ? <ChevronUp size={16} color="#FFFFFF" /> : <ChevronDown size={16} color="#FFFFFF" />}
               </Pressable>
             </RNView>
-          </RNView>
 
-          {loading ? (
-            <RNView style={styles.loadingState}>
-              <ActivityIndicator size="small" color={isDark ? '#E2E8F0' : '#4F46E5'} />
-              <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>Loading records...</Text>
-            </RNView>
-          ) : !openExpanded ? (
-            <RNView style={[styles.emptyState, isDark && styles.emptyStateDark]}>
-              <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>Open records are minimized.</Text>
-              <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-                Expand this section when you want to review the records that are still active in this view.
-              </Text>
-            </RNView>
-          ) : filteredRecords.length === 0 ? (
-            <RNView style={[styles.emptyState, isDark && styles.emptyStateDark]}>
-              <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>No records match this view.</Text>
-              <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-                Choose another metric or create a new record to populate this section.
-              </Text>
-            </RNView>
-          ) : (
-            filteredRecords.map((record) => (
-              <Pressable
-                key={record.id}
-                style={({ hovered, pressed }) => [
-                  styles.recordRow,
-                  isDark && styles.recordRowDark,
-                  styles.interactiveSurface,
-                  compactWeb && styles.recordRowCompact,
-                  hovered && styles.interactiveSurfaceHovered,
-                  pressed && styles.interactiveSurfacePressed,
-                ]}
-                onPress={() => router.push(`/loan/${record.id}`)}
-              >
-                <RNView style={styles.recordCopy}>
-                  <Text style={[styles.recordName, isDark && styles.recordNameDark]}>{record.contacts?.name || 'Unknown contact'}</Text>
-                  <Text style={[styles.recordMeta, isDark && styles.recordMetaDark]}>
-                    {record.category === 'item'
-                      ? 'Item record'
-                      : record.type === 'lent'
-                        ? 'Lent record'
-                        : 'Borrowed record'}
-                  </Text>
-                  <Text style={[styles.recordSubmeta, isDark && styles.recordSubmetaDark]}>{getDueLabel(record.due_date)}</Text>
-                </RNView>
-                <RNView style={[styles.recordValueBlock, compactWeb && styles.recordValueBlockCompact]}>
-                  <Text style={[styles.recordValue, isDark && styles.recordValueDark]}>{getRecordValue(record)}</Text>
-                  <Text style={[styles.recordStatus, isDark && styles.recordStatusDark]}>{record.status}</Text>
-                </RNView>
-              </Pressable>
-            ))
-          )}
-        </Card>
-
-        <Card
-          style={[
-            styles.panelCard,
-            styles.stackedPanelCard,
-            compactWeb && styles.panelCardCompact,
-          ]}
-        >
-          <RNView style={[styles.recentHeader, narrowPanels && styles.recentHeaderCompact]}>
-            <Text style={[styles.panelTitle, isDark && styles.panelTitleDark]}>Recent records</Text>
-            <Pressable
-              onPress={() => setRecentExpanded((current) => !current)}
-              style={({ hovered, pressed }) => [
-                styles.sectionActionButton,
-                styles.interactiveButtonInline,
-                isDark && styles.sectionActionButtonDark,
-                hovered && (isDark ? styles.sectionActionButtonHoveredDark : styles.sectionActionButtonHovered),
-                pressed && styles.inlineActionButtonPressed,
-              ]}
-            >
-              <Text style={styles.sectionActionButtonText}>{recentExpanded ? 'Collapse' : 'Expand'}</Text>
-              {recentExpanded ? <ChevronUp size={16} color="#FFFFFF" /> : <ChevronDown size={16} color="#FFFFFF" />}
-            </Pressable>
-          </RNView>
-
-          {loading ? (
-            <RNView style={styles.loadingState}>
-              <ActivityIndicator size="small" color={isDark ? '#E2E8F0' : '#4F46E5'} />
-              <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>Loading your web workspace...</Text>
-            </RNView>
-          ) : !recentExpanded ? (
-            <RNView style={[styles.emptyState, isDark && styles.emptyStateDark]}>
-              <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>Recent records are minimized.</Text>
-              <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-                Expand this section when you want to review the latest activity across your records.
-              </Text>
-            </RNView>
-          ) : (
-            <>
-              {recentRecords.length === 0 ? (
-                <RNView style={[styles.emptyState, isDark && styles.emptyStateDark]}>
-                  <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>No records yet.</Text>
-                  <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
-                    Create your first shared record here and this dashboard will start behaving like the online version of the app.
-                  </Text>
-                </RNView>
-              ) : (
-                recentRecords.map((record) => (
-                  <Pressable
-                    key={record.id}
-                    style={({ hovered, pressed }) => [
-                      styles.recordRow,
-                      isDark && styles.recordRowDark,
-                      styles.interactiveSurface,
-                      compactWeb && styles.recordRowCompact,
-                      hovered && styles.interactiveSurfaceHovered,
-                      pressed && styles.interactiveSurfacePressed,
-                    ]}
-                    onPress={() => router.push(`/loan/${record.id}`)}
-                  >
-                    <RNView style={styles.recordCopy}>
-                      <Text style={[styles.recordName, isDark && styles.recordNameDark]}>{record.contacts?.name || 'Unknown contact'}</Text>
-                      <Text style={[styles.recordMeta, isDark && styles.recordMetaDark]}>
-                        {record.category === 'item' ? 'Item record' : record.type === 'lent' ? 'Lent record' : 'Borrowed record'}
-                      </Text>
-                      <Text style={[styles.recordSubmeta, isDark && styles.recordSubmetaDark]}>{getDueLabel(record.due_date)}</Text>
-                    </RNView>
-                    <RNView style={[styles.recordValueBlock, compactWeb && styles.recordValueBlockCompact]}>
-                      <Text style={[styles.recordValue, isDark && styles.recordValueDark]}>{getRecordValue(record)}</Text>
-                      <Text style={[styles.recordStatus, isDark && styles.recordStatusDark]}>{record.status}</Text>
-                    </RNView>
-                  </Pressable>
-                ))
-              )}
-            </>
-          )}
-        </Card>
+            {loading ? (
+              <RNView style={styles.loadingState}>
+                <ActivityIndicator size="small" color={isDark ? '#E2E8F0' : '#4F46E5'} />
+                <Text style={[styles.loadingText, isDark && styles.loadingTextDark]}>Loading your web workspace...</Text>
+              </RNView>
+            ) : !recentExpanded ? (
+              <RNView style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+                <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>Recent records are minimized.</Text>
+                <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+                  Expand this section when you want to review the latest activity across your records.
+                </Text>
+              </RNView>
+            ) : (
+              <>
+                {recentRecords.length === 0 ? (
+                  <RNView style={[styles.emptyState, isDark && styles.emptyStateDark]}>
+                    <Text style={[styles.emptyTitle, isDark && styles.emptyTitleDark]}>No records yet.</Text>
+                    <Text style={[styles.emptyText, isDark && styles.emptyTextDark]}>
+                      Create your first shared record here and this dashboard will start behaving like the online version of the app.
+                    </Text>
+                  </RNView>
+                ) : (
+                  recentRecords.map((record) => (
+                    <Pressable
+                      key={record.id}
+                      style={({ hovered, pressed }) => [
+                        styles.recordRow,
+                        isDark && styles.recordRowDark,
+                        styles.interactiveSurface,
+                        compactWeb && styles.recordRowCompact,
+                        hovered && styles.interactiveSurfaceHovered,
+                        pressed && styles.interactiveSurfacePressed,
+                      ]}
+                      onPress={() => router.push(`/loan/${record.id}`)}
+                    >
+                      <RNView style={styles.recordCopy}>
+                        <Text style={[styles.recordName, isDark && styles.recordNameDark]}>{record.contacts?.name || 'Unknown contact'}</Text>
+                        <Text style={[styles.recordMeta, isDark && styles.recordMetaDark]}>
+                          {record.category === 'item' ? 'Item record' : record.type === 'lent' ? 'Lent record' : 'Borrowed record'}
+                        </Text>
+                        <Text style={[styles.recordSubmeta, isDark && styles.recordSubmetaDark]}>{getDueLabel(record.due_date)}</Text>
+                      </RNView>
+                      <RNView style={[styles.recordValueBlock, compactWeb && styles.recordValueBlockCompact]}>
+                        <Text style={[styles.recordValue, isDark && styles.recordValueDark]}>{getRecordValue(record)}</Text>
+                        <Text style={[styles.recordStatus, isDark && styles.recordStatusDark]}>{record.status}</Text>
+                      </RNView>
+                    </Pressable>
+                  ))
+                )}
+              </>
+            )}
+          </Card>
+        </RNView>
       </RNView>
     </WebAccountLayout>
   );
@@ -970,6 +974,12 @@ const styles = StyleSheet.create({
   recordPanelsStack: {
     width: '100%',
     flexDirection: 'column',
+    gap: 20,
+  },
+  recordPanelSection: {
+    width: '100%',
+    position: 'relative',
+    zIndex: 0,
   },
   panelCard: {
     flex: 1,
@@ -985,9 +995,11 @@ const styles = StyleSheet.create({
     width: '100%',
     minWidth: 0,
     alignSelf: 'stretch',
+    position: 'relative',
+    zIndex: 0,
   },
   recentPanelCard: {
-    marginTop: 20,
+    marginTop: 0,
   },
   panelTitle: {
     fontSize: 20,
