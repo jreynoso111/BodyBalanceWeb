@@ -39,6 +39,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "appEnv": "development",
+      "googleOAuthEnabled": false,
+      "router": {},
+      "eas": {
+        "projectId": "083f82e8-c96f-42fa-aa0d-376049f40811"
+      }
     }
   }
 }
