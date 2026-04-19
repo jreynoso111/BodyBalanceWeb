@@ -20,6 +20,9 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "android": {
+      "package": "com.jreynoso.buddybalance"
+    },
     "plugins": [
       "expo-router",
       "expo-notifications",
