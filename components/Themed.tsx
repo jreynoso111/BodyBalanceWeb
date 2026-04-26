@@ -3,7 +3,7 @@
  * https://docs.expo.io/guides/color-schemes/
  */
 import React from 'react';
-import { Text as DefaultText, View as DefaultView, ViewStyle } from 'react-native';
+import { StyleSheet, Text as DefaultText, View as DefaultView } from 'react-native';
 import { AnimatedBackground } from './AnimatedBackground';
 
 import { useColorScheme } from './useColorScheme';
@@ -19,6 +19,26 @@ type ThemeProps = {
 
 export type TextProps = ThemeProps & DefaultText['props'];
 export type ViewProps = ThemeProps & DefaultView['props'];
+
+const DARK_TEXT_COLOR_MAP: Record<string, string> = {
+  '#0f172a': '#f8fafc',
+  '#111827': '#f8fafc',
+  '#1e293b': '#e2e8f0',
+  '#334155': '#cbd5e1',
+  '#475569': '#cbd5e1',
+  '#64748b': '#e2e8f0',
+  '#94a3b8': '#f1f5f9',
+  '#cbd5e1': '#e2e8f0',
+  '#e2e8f0': '#f8fafc',
+  '#f8fafc': '#f8fafc',
+  '#ffffff': '#ffffff',
+};
+
+function remapDarkTextColor(color?: string) {
+  if (!color) return color;
+  const normalized = color.trim().toLowerCase();
+  return DARK_TEXT_COLOR_MAP[normalized] || color;
+}
 
 function translateChildren(node: React.ReactNode, language: 'en' | 'es' | 'fr' | 'it'): React.ReactNode {
   if (typeof node === 'string') return translateText(node, language);
@@ -52,12 +72,17 @@ export function useThemeColor(
 
 export function Text(props: TextProps) {
   const { style, lightColor, darkColor, children, ...otherProps } = props;
-  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  const flattenedStyle = StyleSheet.flatten(style) as { color?: string } | undefined;
+  const theme = useColorScheme();
+  const themedColor = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  const resolvedStyleColor =
+    theme === 'dark' ? remapDarkTextColor(flattenedStyle?.color) : flattenedStyle?.color;
+  const color = darkColor || lightColor ? themedColor : resolvedStyleColor || themedColor;
   const language = useAuthStore((state) => state.language);
   const translatedChildren = translateChildren(children, language);
 
   return (
-    <DefaultText style={[{ color }, style]} {...otherProps}>
+    <DefaultText style={[style, { color }]} {...otherProps}>
       {translatedChildren}
     </DefaultText>
   );

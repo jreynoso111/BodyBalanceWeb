@@ -186,10 +186,7 @@ export async function registerForPushNotificationsAsync(options?: {
 }) {
     const requestPermission = options?.requestPermission ?? true;
     let token: string | null = null;
-
-    if (!Device.isDevice && !isWeb) {
-        return null;
-    }
+    const canFetchExpoPushToken = !isWeb && Device.isDevice;
 
     const Notifications = await getNotificationsModule();
     if (!Notifications) {
@@ -227,7 +224,7 @@ export async function registerForPushNotificationsAsync(options?: {
         return null;
     }
 
-    if (!isWeb) {
+    if (canFetchExpoPushToken) {
         try {
             const projectId = getExpoProjectId();
             token = (
@@ -244,11 +241,11 @@ export async function registerForPushNotificationsAsync(options?: {
             return null;
         }
     } else {
-        token = 'web-local';
+        token = 'local-notifications-enabled';
     }
 
     if (options?.userId) {
-        await savePushToken(options.userId, token);
+        await savePushToken(options.userId, canFetchExpoPushToken ? token : null);
     }
 
     return token;

@@ -24,6 +24,7 @@ export default function NewContactScreen() {
     const [socialNetwork, setSocialNetwork] = useState('');
     const [existingTargetUserId, setExistingTargetUserId] = useState<string | null>(null);
     const [existingLinkStatus, setExistingLinkStatus] = useState<'private' | 'pending' | 'accepted'>('private');
+    const [wantsLink, setWantsLink] = useState(screenMode === 'friend');
     const [inviteSentVisible, setInviteSentVisible] = useState(false);
     const [duplicateFriendVisible, setDuplicateFriendVisible] = useState(false);
     const [duplicateFriendLabel, setDuplicateFriendLabel] = useState('');
@@ -153,6 +154,7 @@ export default function NewContactScreen() {
             setSocialNetwork(data.social_network || '');
             setExistingTargetUserId(data.target_user_id || null);
             setExistingLinkStatus(normalizedLinkStatus);
+            setWantsLink(Boolean(data.target_user_id || normalizedLinkStatus !== 'private'));
         }
         setLoading(false);
     };
@@ -238,9 +240,9 @@ export default function NewContactScreen() {
         let targetUserId: string | null = existingTargetUserId;
         let relationLookupWarning: string | null = null;
         const normalizedFriendCode = friendCode.trim().toUpperCase();
-        const wantsAccountLink = Boolean(normalizedFriendCode);
+        const wantsAccountLink = wantsLink && Boolean(normalizedFriendCode);
 
-        if (normalizedFriendCode) {
+        if (wantsAccountLink) {
             const { data, error: friendCodeLookupError } = await supabase.rpc('find_profile_by_friend_code', {
                 p_friend_code: normalizedFriendCode,
             });
@@ -310,7 +312,7 @@ export default function NewContactScreen() {
             }
         }
 
-        const nextLinkStatus: 'private' | 'pending' | 'accepted' = targetUserId
+        const nextLinkStatus: 'private' | 'pending' | 'accepted' = targetUserId && wantsAccountLink
             ? existingLinkStatus === 'accepted' && existingTargetUserId === targetUserId
                 ? 'accepted'
                 : 'pending'
@@ -529,6 +531,27 @@ export default function NewContactScreen() {
                 ) : null}
 
                 <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Link account?</Text>
+                    <View style={styles.toggleRow}>
+                        <TouchableOpacity
+                            style={[styles.toggleChip, !wantsLink && styles.toggleChipActive]}
+                            onPress={() => setWantsLink(false)}
+                        >
+                            <Text style={[styles.toggleChipText, !wantsLink && styles.toggleChipTextActive]}>No</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.toggleChip, wantsLink && styles.toggleChipActive]}
+                            onPress={() => setWantsLink(true)}
+                        >
+                            <Text style={[styles.toggleChipText, wantsLink && styles.toggleChipTextActive]}>Yes</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <Text style={styles.helperText}>
+                        If you link it, you can use a friend code and shared confirmations. If not, the contact stays private.
+                    </Text>
+                </View>
+
+                <View style={styles.inputGroup}>
                     <Text style={styles.label}>Full Name *</Text>
                     <TextInput
                         placeholder="e.g. John Doe"
@@ -538,24 +561,26 @@ export default function NewContactScreen() {
                     />
                 </View>
 
-                <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Friend Code (Optional)</Text>
-                    <TextInput
-                        placeholder="e.g. A1B2C3D4"
-                        value={friendCode}
-                        onChangeText={(value) => setFriendCode(value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                        autoCapitalize="characters"
-                        autoCorrect={false}
-                        style={styles.input}
-                    />
-                    <Text style={styles.helperText}>
-                        {isFriendMode
-                            ? existingLinkStatus === 'accepted'
-                                ? 'This contact is already linked. Replace the code only if you need to relink them to another account.'
-                                : 'Use their code to connect both accounts so shared records stay in sync.'
-                            : 'Paste a friend code if this person also uses the app.'}
-                    </Text>
-                </View>
+                {wantsLink ? (
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Friend Code</Text>
+                        <TextInput
+                            placeholder="e.g. A1B2C3D4"
+                            value={friendCode}
+                            onChangeText={(value) => setFriendCode(value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            style={styles.input}
+                        />
+                        <Text style={styles.helperText}>
+                            {isFriendMode
+                                ? existingLinkStatus === 'accepted'
+                                    ? 'This contact is already linked. Replace the code only if you need to relink them to another account.'
+                                    : 'Use their code to connect both accounts so shared records stay in sync.'
+                                : 'Paste a friend code if this person also uses the app.'}
+                        </Text>
+                    </View>
+                ) : null}
 
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>Email (Optional)</Text>
@@ -735,6 +760,33 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 18,
         color: '#4338CA',
+    },
+    toggleRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 10,
+    },
+    toggleChip: {
+        minHeight: 40,
+        paddingHorizontal: 16,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: '#CBD5E1',
+        backgroundColor: '#F8FAFC',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    toggleChipActive: {
+        backgroundColor: '#0F172A',
+        borderColor: '#0F172A',
+    },
+    toggleChipText: {
+        fontSize: 13,
+        fontWeight: '800',
+        color: '#475569',
+    },
+    toggleChipTextActive: {
+        color: '#FFFFFF',
     },
     helperText: {
         marginTop: 8,

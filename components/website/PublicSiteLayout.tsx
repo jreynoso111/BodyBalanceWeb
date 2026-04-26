@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link, usePathname, type Href } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Apple } from 'lucide-react-native';
 import {
   Pressable,
   ScrollView,
@@ -22,7 +21,7 @@ type PublicAction = {
   href: Href;
   label: string;
   variant?: 'primary' | 'secondary';
-  icon?: 'app-store' | 'google-play';
+  icon?: 'google-play';
 };
 
 type PublicSiteLayoutProps = {
@@ -55,8 +54,12 @@ const SIGNALS = [
 ];
 
 const STORE_LINKS: PublicAction[] = [
-  { href: 'https://apps.apple.com/' as Href, label: 'App Store', variant: 'secondary', icon: 'app-store' },
-  { href: 'https://play.google.com/store' as Href, label: 'Google Play', variant: 'secondary', icon: 'google-play' },
+  {
+    href: 'https://play.google.com/store/apps/details?id=com.jreynoso.buddybalance' as Href,
+    label: 'Google Play',
+    variant: 'secondary',
+    icon: 'google-play',
+  },
 ] as const;
 
 function isActivePath(currentPath: string, matches: string[]) {
@@ -80,7 +83,6 @@ function ActionContent({
 
   return (
     <View style={styles.actionContent}>
-      {action.icon === 'app-store' ? <Apple size={iconSize} color={iconColor} strokeWidth={2.2} /> : null}
       {action.icon === 'google-play' ? <GoogleLogo size={iconSize} /> : null}
       <Text
         style={[

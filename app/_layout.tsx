@@ -10,7 +10,8 @@ import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
+import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -21,6 +22,17 @@ import { AppBiometricGate } from '@/components/AppBiometricGate';
 import { useAuth } from '@/hooks/useAuth';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useThemeStore } from '@/store/themeStore';
+import { useAuthStore } from '@/store/authStore';
+import { getPushPermissionStatus, registerForPushNotificationsAsync } from '@/services/notificationService';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -98,6 +110,7 @@ function RootLayoutNav() {
     <SafeAreaProvider>
       <ThemeProvider value={navigationTheme}>
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        <NotificationBootstrapper />
         <Stack
           screenOptions={{
             headerTransparent: true,
@@ -151,4 +164,38 @@ function RootLayoutNav() {
       </ThemeProvider>
     </SafeAreaProvider>
   );
+}
+
+function NotificationBootstrapper() {
+  const user = useAuthStore((state) => state.user);
+  const initialized = useAuthStore((state) => state.initialized);
+  const promptedForUserRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!initialized || !user?.id || Platform.OS === 'web') return;
+    if (promptedForUserRef.current === user.id) return;
+
+    let cancelled = false;
+
+    const promptForNotifications = async () => {
+      const permission = await getPushPermissionStatus();
+      if (cancelled) return;
+
+      if (permission === 'undetermined') {
+        await registerForPushNotificationsAsync({
+          requestPermission: true,
+          userId: user.id,
+        });
+      }
+    };
+
+    promptedForUserRef.current = user.id;
+    void promptForNotifications();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialized, user?.id]);
+
+  return null;
 }

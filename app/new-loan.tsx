@@ -391,6 +391,37 @@ export default function NewLoanScreen() {
     return contact.name.toLowerCase().includes(normalizedContactSearch);
   });
   const dueLabel = dueDate ? formatDueLabel(dueDate) : 'No due date selected';
+  const heroTheme = category === 'money'
+    ? (type === 'lent'
+      ? {
+          card: styles.heroCardMoneyLent,
+          eyebrow: styles.heroEyebrowMoneyLent,
+          title: styles.heroTitleMoneyLent,
+          text: styles.heroTextMoneyLent,
+          shadowColor: '#16A34A',
+        }
+      : {
+          card: styles.heroCardMoneyBorrowed,
+          eyebrow: styles.heroEyebrowMoneyBorrowed,
+          title: styles.heroTitleMoneyBorrowed,
+          text: styles.heroTextMoneyBorrowed,
+          shadowColor: '#DC2626',
+        })
+    : (type === 'lent'
+      ? {
+          card: styles.heroCardItemLent,
+          eyebrow: styles.heroEyebrowItemLent,
+          title: styles.heroTitleItemLent,
+          text: styles.heroTextItemLent,
+          shadowColor: '#64748B',
+        }
+      : {
+          card: styles.heroCardItemBorrowed,
+          eyebrow: styles.heroEyebrowItemBorrowed,
+          title: styles.heroTitleItemBorrowed,
+          text: styles.heroTextItemBorrowed,
+          shadowColor: '#2563EB',
+        });
 
   return (
     <Screen style={styles.container}>
@@ -419,10 +450,174 @@ export default function NewLoanScreen() {
           keyboardDismissMode="on-drag"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void handleRefresh()} />}
         >
-          <Card style={styles.heroCard}>
-            <Text style={styles.eyebrow}>Quick record</Text>
-            <Text style={styles.heroTitle}>What happened?</Text>
-            <Text style={styles.heroText}>Choose one to start. The form below adapts automatically.</Text>
+          <Card
+            style={[
+              styles.heroCard,
+              heroTheme.card,
+              { shadowColor: heroTheme.shadowColor },
+            ]}
+          >
+            <Text style={[styles.eyebrow, heroTheme.eyebrow]}>
+              Quick record
+            </Text>
+            <Text style={[styles.heroTitle, heroTheme.title]}>
+              {type === 'lent' ? 'You gave out a record' : 'You received a record'}
+            </Text>
+            <Text style={[styles.heroText, heroTheme.text]}>
+              Tap any field here to edit the summary without scrolling.
+            </Text>
+
+            <View style={styles.heroSummaryStack}>
+              {category === 'money' ? (
+                <View style={styles.heroAmountBlock}>
+                  <View style={styles.amountInlineHeader}>
+                    <Text style={styles.label}>Amount</Text>
+                    <TouchableOpacity onPress={openAddCurrencyPicker}>
+                      <Text style={styles.linkText}>Add currency</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.amountRow}>
+                    <View style={styles.amountInputContainer}>
+                      <Text style={styles.currencySymbol}>{getCurrencySymbol(currency)}</Text>
+                      <TextInput
+                        placeholder="0.00"
+                        placeholderTextColor="#CBD5E1"
+                        value={amount}
+                        onChangeText={setAmount}
+                        keyboardType="decimal-pad"
+                        style={styles.amountInput}
+                      />
+                    </View>
+                    <TouchableOpacity style={styles.currencySelectorButton} onPress={openAddCurrencyPicker}>
+                      <Text style={styles.currencySelectorCode}>{currency}</Text>
+                      <ChevronDown size={14} color="#475569" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.heroAmountBlock}>
+                  <Text style={styles.label}>Item name</Text>
+                  <TextInput
+                    placeholder={type === 'lent' ? 'What did you give?' : 'What did you receive?'}
+                    placeholderTextColor="#94A3B8"
+                    value={itemName}
+                    onChangeText={setItemName}
+                    style={styles.input}
+                  />
+                </View>
+              )}
+
+              <View style={styles.heroCompactCard}>
+                <Text style={styles.label}>Contact</Text>
+                <View style={styles.contactFieldWrap}>
+                {contacts.length === 0 ? (
+                  <Card style={styles.emptyInlineCard}>
+                    <Text style={styles.emptyInlineText}>Add a friend or contact first so this record has someone attached to it.</Text>
+                    <RNView style={styles.emptyInlineActions}>
+                      <TouchableOpacity style={styles.emptyInlineButton} onPress={() => router.push('/new-contact?mode=friend')}>
+                        <UserPlus size={16} color="#FFFFFF" />
+                        <Text style={styles.emptyInlineButtonText}>Add friend</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.emptyInlineSecondaryButton} onPress={() => router.push('/new-contact')}>
+                        <Text style={styles.emptyInlineSecondaryButtonText}>New contact</Text>
+                      </TouchableOpacity>
+                    </RNView>
+                  </Card>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.selectInput, contactPickerVisible && styles.selectInputActive]}
+                    onPress={() => setContactPickerVisible((current) => !current)}
+                  >
+                    <RNView style={styles.selectInputLeft}>
+                      <Text style={[styles.selectInputText, !selectedContact && styles.selectInputPlaceholder]}>
+                        {selectedContact ? selectedContact.name : 'Select a contact'}
+                      </Text>
+                    </RNView>
+                    <ChevronDown size={18} color="#64748B" />
+                  </TouchableOpacity>
+                )}
+                {contactPickerVisible && contacts.length > 0 ? (
+                  <View style={styles.contactDropdown}>
+                    <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.contactRowScroll}>
+                      {(contactSearchQuery ? filteredContacts : contacts).slice(0, 10).map((contact) => {
+                        const active = contact.id === contactId;
+                        return (
+                          <TouchableOpacity
+                            key={contact.id}
+                            style={[styles.contactRowItem, active && styles.contactRowItemActive]}
+                            onPress={() => {
+                              setContactId(contact.id);
+                              setContactPickerVisible(false);
+                              setContactSearchQuery('');
+                            }}
+                          >
+                            <View style={styles.contactRowTextWrap}>
+                              <Text style={styles.contactRowName} numberOfLines={1}>
+                                {contact.name}
+                              </Text>
+                            </View>
+                            {active ? <Check size={14} color="#4F46E5" /> : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                    <TouchableOpacity style={styles.contactCarouselAddButton} onPress={() => router.push('/new-contact')}>
+                      <Plus size={16} color="#4F46E5" />
+                      <Text style={styles.contactCarouselAddText}>Add contact</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+                </View>
+                {selectedContact ? (
+                  <Card style={[styles.contactStatusCard, selectedContactIsLinked ? styles.contactStatusCardLinked : styles.contactStatusCardPrivate]}>
+                    <Text style={styles.contactStatusTitle}>
+                      {selectedContactIsLinked ? 'Shared friend linked' : selectedContactIsPending ? 'Friend invitation sent' : 'Private contact'}
+                    </Text>
+                    <Text style={styles.contactStatusText}>
+                      {selectedContactIsLinked
+                        ? 'This person is linked inside the app, so they can confirm and follow shared records.'
+                        : selectedContactIsPending
+                        ? 'Your invitation has been sent. Shared confirmations will start as soon as they accept.'
+                        : 'This record stays private until you link this contact with a friend code.'}
+                    </Text>
+                    {!selectedContactIsLinked && !selectedContactIsPending ? (
+                      <TouchableOpacity onPress={() => router.push(`/new-contact?id=${selectedContact.id}&mode=friend`)}>
+                        <Text style={styles.contactStatusLink}>Link this contact</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </Card>
+                ) : null}
+              </View>
+
+              <View style={styles.heroCompactCard}>
+                <Text style={styles.dueDateLabel}>Due date</Text>
+                <View style={styles.dueDateRow}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inlineList}>
+                    {DUE_PRESETS.map((preset) => {
+                      const presetDate = getDateWithOffset(preset.days);
+                      const active = dueDate === presetDate;
+                      return (
+                        <TouchableOpacity
+                          key={preset.label}
+                          style={[styles.smallChip, active && styles.smallChipActive]}
+                          onPress={() => setDueDate(presetDate)}
+                        >
+                          <Text style={[styles.smallChipText, active && styles.smallChipTextActive]}>{preset.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                  <TextInput
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#94A3B8"
+                    value={dueDate}
+                    onChangeText={setDueDate}
+                    autoCapitalize="none"
+                    style={[styles.input, styles.dueDateInput]}
+                  />
+                </View>
+              </View>
+            </View>
           </Card>
 
           <View style={styles.presetGrid}>
@@ -445,149 +640,14 @@ export default function NewLoanScreen() {
             })}
           </View>
 
-          <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Main details</Text>
-            <Text style={styles.sectionSubtitle}>{selectedPreset.subtitle}</Text>
-
-            {category === 'money' ? (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Amount</Text>
-                <View style={styles.amountInputContainer}>
-                  <Text style={styles.currencySymbol}>{getCurrencySymbol(currency)}</Text>
-                  <TextInput
-                    placeholder="0.00"
-                    placeholderTextColor="#CBD5E1"
-                    value={amount}
-                    onChangeText={setAmount}
-                    keyboardType="decimal-pad"
-                    style={styles.amountInput}
-                  />
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inlineList}>
-                  {availableCurrencies.map((code) => (
-                    <TouchableOpacity
-                      key={code}
-                      onPress={() => setCurrency(code)}
-                      style={[styles.smallChip, currency === code && styles.smallChipActive]}
-                    >
-                      <Text style={[styles.smallChipText, currency === code && styles.smallChipTextActive]}>{code}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  <TouchableOpacity style={styles.addChip} onPress={openAddCurrencyPicker}>
-                    <Plus size={14} color="#475569" />
-                    <Text style={styles.addChipText}>Add currency</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              </View>
-            ) : (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Item name</Text>
-                <TextInput
-                  placeholder={type === 'lent' ? 'What did you give?' : 'What did you receive?'}
-                  placeholderTextColor="#94A3B8"
-                  value={itemName}
-                  onChangeText={setItemName}
-                  style={styles.input}
-                />
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              <View style={styles.labelRow}>
-                <Text style={styles.label}>Contact</Text>
-                <RNView style={styles.labelActions}>
-                  <TouchableOpacity onPress={() => router.push('/new-contact?mode=friend')}>
-                    <Text style={styles.linkText}>+ Add friend</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => router.push('/new-contact')}>
-                    <Text style={styles.linkTextMuted}>+ New contact</Text>
-                  </TouchableOpacity>
-                </RNView>
-              </View>
-              {contacts.length === 0 ? (
-                <Card style={styles.emptyInlineCard}>
-                  <Text style={styles.emptyInlineText}>Add a friend or contact first so this record has someone attached to it.</Text>
-                  <RNView style={styles.emptyInlineActions}>
-                    <TouchableOpacity style={styles.emptyInlineButton} onPress={() => router.push('/new-contact?mode=friend')}>
-                      <UserPlus size={16} color="#FFFFFF" />
-                      <Text style={styles.emptyInlineButtonText}>Add friend</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.emptyInlineSecondaryButton} onPress={() => router.push('/new-contact')}>
-                      <Text style={styles.emptyInlineSecondaryButtonText}>New contact</Text>
-                    </TouchableOpacity>
-                  </RNView>
-                </Card>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.selectInput, contactPickerVisible && styles.selectInputActive]}
-                  onPress={() => setContactPickerVisible(true)}
-                >
-                  <RNView style={styles.selectInputLeft}>
-                    <Text style={[styles.selectInputText, !selectedContact && styles.selectInputPlaceholder]}>
-                      {selectedContact ? selectedContact.name : 'Select a contact'}
-                    </Text>
-                  </RNView>
-                  <ChevronDown size={18} color="#64748B" />
-                </TouchableOpacity>
-              )}
-              {selectedContact ? (
-                <Card style={[styles.contactStatusCard, selectedContactIsLinked ? styles.contactStatusCardLinked : styles.contactStatusCardPrivate]}>
-                  <Text style={styles.contactStatusTitle}>
-                    {selectedContactIsLinked ? 'Shared friend linked' : selectedContactIsPending ? 'Friend invitation sent' : 'Private contact'}
-                  </Text>
-                  <Text style={styles.contactStatusText}>
-                    {selectedContactIsLinked
-                      ? 'This person is linked inside the app, so they can confirm and follow shared records.'
-                      : selectedContactIsPending
-                      ? 'Your invitation has been sent. Shared confirmations will start as soon as they accept.'
-                      : 'This record stays private until you link this contact with a friend code.'}
-                  </Text>
-                  {!selectedContactIsLinked && !selectedContactIsPending ? (
-                    <TouchableOpacity onPress={() => router.push(`/new-contact?id=${selectedContact.id}&mode=friend`)}>
-                      <Text style={styles.contactStatusLink}>Link this contact</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </Card>
-              ) : null}
-            </View>
-          </Card>
-
-          <Card style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Due date</Text>
-            <Text style={styles.sectionSubtitle}>{dueLabel}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inlineList}>
-              {DUE_PRESETS.map((preset) => {
-                const presetDate = getDateWithOffset(preset.days);
-                const active = dueDate === presetDate;
-                return (
-                  <TouchableOpacity
-                    key={preset.label}
-                    style={[styles.smallChip, active && styles.smallChipActive]}
-                    onPress={() => setDueDate(presetDate)}
-                  >
-                    <Text style={[styles.smallChipText, active && styles.smallChipTextActive]}>{preset.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-            <TextInput
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94A3B8"
-              value={dueDate}
-              onChangeText={setDueDate}
-              autoCapitalize="none"
-              style={styles.input}
-            />
-          </Card>
-
           <TouchableOpacity style={styles.moreToggle} onPress={() => setShowMoreOptions((current) => !current)}>
             <RNView style={styles.moreToggleLeft}>
               <RNView style={styles.moreToggleIcon}>
-                <ChevronDown size={18} color="#0F172A" style={showMoreOptions ? styles.rotatedIcon : undefined} />
+                <BellDot size={16} color="#64748B" />
               </RNView>
-              <View>
-                <Text style={styles.moreToggleTitle}>More options</Text>
-                <Text style={styles.moreToggleText}>Notes, receipt photo, and reminders.</Text>
+              <View style={styles.moreToggleCopy}>
+                <Text style={styles.moreToggleTitle}>Optional extras</Text>
+                <Text style={styles.moreToggleText}>Tap to add notes, photos, or reminders.</Text>
               </View>
             </RNView>
           </TouchableOpacity>
@@ -700,76 +760,6 @@ export default function NewLoanScreen() {
             </RNView>
           </Modal>
 
-          <Modal
-            animationType="slide"
-            transparent
-            visible={contactPickerVisible}
-            onRequestClose={() => setContactPickerVisible(false)}
-          >
-            <RNView style={styles.currencyModalOverlay}>
-              <Card style={styles.contactModalCard}>
-                <RNView style={styles.contactModalHeader}>
-                  <Text style={styles.currencyModalTitle}>Choose Contact</Text>
-                  <TouchableOpacity
-                    style={styles.contactModalCloseButton}
-                    onPress={() => {
-                      setContactPickerVisible(false);
-                      setContactSearchQuery('');
-                    }}
-                  >
-                    <Text style={styles.contactModalCloseButtonText}>Done</Text>
-                  </TouchableOpacity>
-                </RNView>
-
-                <RNView style={styles.contactSearchBox}>
-                  <Search size={16} color="#94A3B8" />
-                  <TextInput
-                    placeholder="Search contacts..."
-                    placeholderTextColor="#94A3B8"
-                    value={contactSearchQuery}
-                    onChangeText={setContactSearchQuery}
-                    style={styles.contactSearchInput}
-                  />
-                </RNView>
-
-                <ScrollView style={styles.currencyModalList} keyboardShouldPersistTaps="handled">
-                  {filteredContacts.map((contact) => {
-                    const active = contact.id === contactId;
-                    return (
-                      <TouchableOpacity
-                        key={contact.id}
-                        style={styles.contactModalItem}
-                        onPress={() => {
-                          setContactId(contact.id);
-                          setContactPickerVisible(false);
-                          setContactSearchQuery('');
-                        }}
-                      >
-                        <RNView style={styles.contactModalItemBody}>
-                          <Text style={styles.contactModalItemTitle}>{contact.name}</Text>
-                          <Text style={styles.contactModalItemMeta}>
-                            {contact.link_status === 'accepted'
-                              ? 'Linked friend'
-                              : contact.link_status === 'pending'
-                              ? 'Invitation sent'
-                              : 'Private contact'}
-                          </Text>
-                        </RNView>
-                        {active ? <Check size={18} color="#4F46E5" /> : null}
-                      </TouchableOpacity>
-                    );
-                  })}
-
-                  {filteredContacts.length === 0 ? (
-                    <RNView style={styles.contactModalEmpty}>
-                      <Text style={styles.contactModalEmptyText}>No contacts match that search.</Text>
-                    </RNView>
-                  ) : null}
-                </ScrollView>
-              </Card>
-            </RNView>
-          </Modal>
-
           <TouchableOpacity onPress={onSave} disabled={loading} style={[styles.saveButton, loading && styles.saveButtonDisabled]}>
             <Text style={styles.saveButtonText}>{loading ? 'Saving...' : 'Save Transaction'}</Text>
           </TouchableOpacity>
@@ -825,27 +815,113 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   heroCard: {
-    paddingHorizontal: 18,
-    paddingVertical: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  heroCardMoneyLent: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#86EFAC',
+  },
+  heroCardMoneyBorrowed: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FCA5A5',
+  },
+  heroCardItemLent: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+  },
+  heroCardItemBorrowed: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
   },
   eyebrow: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: '#64748B',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   heroTitle: {
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: '900',
     color: '#0F172A',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   heroText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     color: '#64748B',
+  },
+  heroEyebrowMoneyLent: {
+    color: '#15803D',
+  },
+  heroEyebrowMoneyBorrowed: {
+    color: '#B91C1C',
+  },
+  heroEyebrowItemLent: {
+    color: '#475569',
+  },
+  heroEyebrowItemBorrowed: {
+    color: '#1D4ED8',
+  },
+  heroTitleMoneyLent: {
+    color: '#14532D',
+  },
+  heroTitleMoneyBorrowed: {
+    color: '#7F1D1D',
+  },
+  heroTitleItemLent: {
+    color: '#334155',
+  },
+  heroTitleItemBorrowed: {
+    color: '#1E3A8A',
+  },
+  heroTextMoneyLent: {
+    color: '#166534',
+  },
+  heroTextMoneyBorrowed: {
+    color: '#991B1B',
+  },
+  heroTextItemLent: {
+    color: '#475569',
+  },
+  heroTextItemBorrowed: {
+    color: '#1D4ED8',
+  },
+  heroAmountBlock: {
+    marginTop: 12,
+    gap: 10,
+  },
+  heroSummaryStack: {
+    marginTop: 12,
+    gap: 12,
+  },
+  heroCompactCard: {
+    gap: 8,
+    position: 'relative',
+  },
+  dueDateLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  dueDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dueDateInput: {
+    width: 104,
+    flexShrink: 0,
+  },
+  amountInlineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
   },
   presetGrid: {
     flexDirection: 'row',
@@ -890,19 +966,19 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   sectionCard: {
-    padding: 20,
+    padding: 16,
   },
   sectionTitle: {
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
     marginBottom: 4,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
     color: '#64748B',
-    marginBottom: 18,
+    marginBottom: 14,
   },
   inputGroup: {
     marginBottom: 18,
@@ -943,35 +1019,60 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   amountInputContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 18,
-    paddingVertical: 6,
-    marginBottom: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
   },
   currencySymbol: {
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: '900',
     color: '#0F172A',
-    marginRight: 8,
+    marginRight: 6,
   },
   amountInput: {
     flex: 1,
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: '900',
     color: '#0F172A',
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   inlineList: {
-    gap: 10,
+    gap: 6,
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  currencySelectorButton: {
+    minWidth: 88,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  currencySelectorCode: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   smallChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderRadius: 999,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
@@ -982,7 +1083,7 @@ const styles = StyleSheet.create({
     borderColor: '#0F172A',
   },
   smallChipText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     color: '#475569',
   },
@@ -1009,11 +1110,11 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     color: '#0F172A',
   },
   textArea: {
@@ -1067,13 +1168,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   selectInput: {
-    minHeight: 56,
-    borderRadius: 18,
+    minHeight: 50,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1087,7 +1188,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   selectInputText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -1095,8 +1196,8 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
   contactStatusCard: {
-    marginTop: 12,
-    padding: 16,
+    marginTop: 10,
+    padding: 14,
   },
   contactStatusCardLinked: {
     backgroundColor: '#ECFDF5',
@@ -1107,14 +1208,14 @@ const styles = StyleSheet.create({
     borderColor: '#FED7AA',
   },
   contactStatusTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   contactStatusText: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12,
+    lineHeight: 17,
     color: '#475569',
   },
   contactStatusLink: {
@@ -1123,18 +1224,41 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#4F46E5',
   },
+  contactInlineDropdown: {
+    position: 'absolute',
+    top: 62,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    elevation: 12,
+    marginTop: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    gap: 10,
+  },
   moreToggle: {
     borderRadius: 22,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 18,
+    padding: 16,
   },
   moreToggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     backgroundColor: 'transparent',
+  },
+  moreToggleCopy: {
+    flex: 1,
   },
   moreToggleIcon: {
     width: 34,
@@ -1156,6 +1280,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
+    flexShrink: 1,
   },
   inlineInputRow: {
     position: 'relative',
@@ -1268,34 +1393,74 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     paddingVertical: 0,
   },
-  contactModalItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+  contactRowScroll: {
+    maxHeight: 280,
+  },
+  contactFieldWrap: {
+    position: 'relative',
     backgroundColor: 'transparent',
   },
-  contactModalItemBody: {
+  contactDropdown: {
+    position: 'absolute',
+    top: 52,
+    left: 0,
+    right: 0,
+    zIndex: 50,
+    elevation: 12,
+    padding: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    gap: 10,
+  },
+  contactRowItem: {
+    minHeight: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  contactRowItemActive: {
+    borderColor: '#4F46E5',
+    backgroundColor: '#EEF2FF',
+  },
+  contactRowTextWrap: {
     flex: 1,
-    backgroundColor: 'transparent',
     marginRight: 12,
   },
-  contactModalItemTitle: {
-    fontSize: 15,
+  contactRowName: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 3,
   },
-  contactModalItemMeta: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  contactModalEmpty: {
-    paddingVertical: 24,
+  contactCarouselAddButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+    backgroundColor: '#EEF2FF',
+  },
+  contactCarouselAddText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#4F46E5',
   },
   contactModalEmptyText: {
     fontSize: 14,
